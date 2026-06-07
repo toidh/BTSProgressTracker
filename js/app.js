@@ -922,7 +922,7 @@ const App = {
               return '-';
             };
             return `<tr>
-              <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
+              <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" style="color:${color}" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
               <td>${s['Phân loại'] || '-'}</td>
               <td class="num">${formatProgress(s['Tiến độ 4G'], '4G', s['Phân loại'])}</td>
               <td class="num">${formatProgress(s['Tiến độ 5G'], '5G', s['Phân loại'])}</td>
@@ -1128,7 +1128,7 @@ const App = {
             const status = DataService.getSiteStatus(s);
             const color = DataService.getStatusColor(status, s);
             return `<tr>
-              <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
+              <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" style="color:${color}" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
               <td class="num">${formatProgress(s['Tiến độ 4G'], '4G', s['Phân loại'])}</td>
               <td class="num">${formatProgress(s['Tiến độ 5G'], '5G', s['Phân loại'])}</td>
               <td>${s['User cập nhật'] || '-'}</td>
@@ -1419,7 +1419,7 @@ const App = {
       const status = DataService.getSiteStatus(s);
       const color = DataService.getStatusColor(status, s);
       return `<tr>
-        <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
+        <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" style="color:${color}" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
         <td>${s['Phân loại'] || '-'}</td>
         <td class="num">${formatProgress(s['Tiến độ 4G'], '4G', s['Phân loại'])}</td>
         <td class="num">${formatProgress(s['Tiến độ 5G'], '5G', s['Phân loại'])}</td>
