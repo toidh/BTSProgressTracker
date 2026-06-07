@@ -1,0 +1,53 @@
+/**
+ * BTS Progress Tracker - Configuration
+ * 
+ * HƯỚNG DẪN: Sau khi deploy Google Apps Script, dán URL vào API_URL bên dưới.
+ * Chỉ cần thay đổi 1 lần duy nhất tại đây, tất cả user sẽ dùng chung.
+ */
+const AppConfig = {
+  // ⚠️ DÁN URL GOOGLE APPS SCRIPT CỦA BẠN VÀO ĐÂY:
+  API_URL: 'https://script.google.com/macros/s/AKfycbzzGJxszhb1vbNKF-f4NZ6QyadEem8TGWCDL1Vbsz4UJwMB0DhAEItEqFjQUHN9YuqidQ/exec',
+
+  // App info
+  APP_NAME: 'SWAP Progress Tracker',
+  APP_VERSION: '2.0.0',
+
+  // Map defaults (centered on Bạc Liêu province)
+  MAP_CENTER: [9.17684, 105.15691],
+  MAP_ZOOM: 12,
+  MAP_MIN_ZOOM: 8,
+  MAP_MAX_ZOOM: 19,
+
+  // Data refresh interval (milliseconds) - 5 minutes
+  DATA_REFRESH_INTERVAL: 5 * 60 * 1000,
+
+  // Marker colors (darker for outdoor visibility)
+  COLORS: {
+    // Station type colors
+    TYPE_5G_4G: '#00C4D4',    // Dark Blue - 5G_4G Z stations 1d4ed8
+    TYPE_5G: '#9C00E6',        // Dark Purple - 5G Z stations 7c3aed
+    TYPE_4G: '#FF8000',        // Dark Amber - 4G Z stations f59e0b
+
+    // Progress colors
+    IN_PROGRESS: '#FF1A1A',    // Dark Orange - updated but not complete ea580c
+    COMPLETED: '#00C41C',      // Dark Green - completed 059669
+    DAILY_PLAN: '#0044CC',     // Dark Red - in today's daily plan b91c1c
+
+    // UI colors
+    PRIMARY: '#1d4ed8',
+    SUCCESS: '#166534',
+    WARNING: '#d97706',
+    DANGER: '#b91c1c',
+    ACCENT: '#7c3aed',
+  },
+
+  // LocalStorage keys
+  STORAGE_KEYS: {
+    API_URL: 'bts_api_url',
+    SESSION: 'bts_session',
+    SITES_DATA: 'bts_sites_data',
+    PENDING_UPDATES: 'bts_pending_updates',
+    LAST_SYNC: 'bts_last_sync',
+    MAP_STATE: 'bts_map_state',
+  }
+};
