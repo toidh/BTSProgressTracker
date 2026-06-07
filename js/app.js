@@ -860,6 +860,8 @@ const App = {
     const planNotStarted = planSites.length - planCompleted - planInProgress;
     const plan4gDone = planSites.filter(s => String(s['Tiến độ 4G'] || '').trim() === 'Hoàn thành').length;
     const plan5gDone = planSites.filter(s => String(s['Tiến độ 5G'] || '').trim() === 'Hoàn thành').length;
+      const planTotal4g = planSites.filter(s => String(s['Phân loại'] || '').trim() !== '5G Z').length;
+      const planTotal5g = planSites.filter(s => String(s['Phân loại'] || '').trim() !== '4G Z').length;
 
     // Sort logic
     App.dailyPlanSort = App.dailyPlanSort || 'tktu';
@@ -893,8 +895,8 @@ const App = {
           Hoàn thành: <strong style="color:var(--color-green)" class="clickable-number" onclick="App.showSiteList('daily_plan_completed', 'Hoàn thành (Kế hoạch ngày)')">${planCompleted}</strong> |
           Đang thực hiện: <strong style="color:var(--color-red)" class="clickable-number" onclick="App.showSiteList('daily_plan_in_progress', 'Đang thực hiện (Kế hoạch ngày)')">${planInProgress}</strong> |
           Chưa thực hiện: <strong style="color:var(--text-muted)" class="clickable-number" onclick="App.showSiteList('daily_plan_pending', 'Chưa thực hiện (Kế hoạch ngày)')">${planNotStarted}</strong><br>
-          4G: <strong style="color:var(--color-blue)">${plan4gDone}/${planSites.length}</strong> |
-          5G: <strong style="color:var(--color-purple)">${plan5gDone}/${planSites.length}</strong>
+          4G: <strong style="color:var(--color-blue)">${plan4gDone}/${planTotal4g}</strong> |
+          5G: <strong style="color:var(--color-purple)">${plan5gDone}/${planTotal5g}</strong>
         </div>
         <div>
           <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2)" onchange="App.dailyPlanSort = this.value; App.renderDashboard()">
@@ -931,8 +933,8 @@ const App = {
           <tr style="font-weight:700;border-top:2px solid var(--border-glass);background:rgba(255,255,255,0.02)">
             <td>TỔNG</td>
             <td style="color:var(--color-blue)">${planSites.length} trạm</td>
-            <td class="num" style="color:var(--color-green)">${plan4gDone}/${planSites.length}</td>
-            <td class="num" style="color:var(--color-green)">${plan5gDone}/${planSites.length}</td>
+            <td class="num" style="color:var(--color-green)">${plan4gDone}/${planTotal4g}</td>
+            <td class="num" style="color:var(--color-green)">${plan5gDone}/${planTotal5g}</td>
             <td colspan="2" class="pct">${planCompleted}/${planSites.length} hoàn thành</td>
           </tr>
         </tbody>
