@@ -34,7 +34,7 @@ const App = {
   // ============================================================
   registerSW() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').then((reg) => {
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
         console.log('[App] Service Worker registered');
         
         // Auto check for updates when page becomes visible
@@ -52,7 +52,10 @@ const App = {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (!refreshing) {
           refreshing = true;
-          window.location.reload();
+          this.showToast('🔄 Đã phát hiện phiên bản mới, đang tự động xóa cache và tải lại...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
         }
       });
     }
