@@ -456,7 +456,18 @@ const MapManager = {
   },
 
   loadSectors(sectors) {
-    this.sectorData = sectors || [];
+    const data = sectors || [];
+    const getOrder = (type) => {
+      if (type === '5g') return 1;
+      if (type === '4g700') return 2;
+      return 3;
+    };
+    data.sort((a, b) => {
+      const typeA = this.getSectorType(a['Sector'] || '');
+      const typeB = this.getSectorType(b['Sector'] || '');
+      return getOrder(typeA) - getOrder(typeB);
+    });
+    this.sectorData = data;
     this.renderSectors();
   },
 
@@ -523,16 +534,17 @@ const MapManager = {
         });
       }
 
+      const val = (v) => (v !== undefined && v !== null && String(v).trim() !== '') ? v : '-';
       shape.bindPopup(`
         <div style="font-family:'Inter',sans-serif;font-size:12px;min-width:180px;">
           <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:${color};">${sectorName}</div>
           <table style="width:100%;border-collapse:collapse;">
-            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cấu hình mới</td><td style="font-weight:600;">${sector['Cấu hình mới'] || '-'}</td></tr>
-            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cao/chân cột</td><td style="font-weight:600;">${sector['Độ cao so với chân cột'] || '-'} m</td></tr>
-            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cao/mặt đất</td><td style="font-weight:600;">${sector['Độ cao so với mặt đất'] || '-'} m</td></tr>
-            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Azimuth</td><td style="font-weight:600;">${sector['Azimuth'] || '-'}°</td></tr>
-            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Tilt cơ</td><td style="font-weight:600;">${sector['Tilt cơ'] || '-'}°</td></tr>
-            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Tilt điện</td><td style="font-weight:600;">${sector['Tilt điện'] || '-'}°</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cấu hình mới</td><td style="font-weight:600;">${val(sector['Cấu hình mới'])}</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cao/chân cột</td><td style="font-weight:600;">${val(sector['Độ cao so với chân cột'])} m</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cao/mặt đất</td><td style="font-weight:600;">${val(sector['Độ cao so với mặt đất'])} m</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Azimuth</td><td style="font-weight:600;">${val(sector['Azimuth'])}°</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Tilt cơ</td><td style="font-weight:600;">${val(sector['Tilt cơ'])}°</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Tilt điện</td><td style="font-weight:600;">${val(sector['Tilt điện'])}°</td></tr>
           </table>
         </div>
       `);
