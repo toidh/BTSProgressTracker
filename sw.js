@@ -1,14 +1,14 @@
-const CACHE_NAME = 'bts-tracker-v40';
+const CACHE_NAME = 'bts-tracker-v41';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './css/style.css',
-  './js/config.js?v=40',
-  './js/storage.js?v=40',
-  './js/data.js?v=40',
-  './js/auth.js?v=40',
-  './js/map.js?v=40',
-  './js/app.js?v=40',
+  './js/config.js?v=41',
+  './js/storage.js?v=41',
+  './js/data.js?v=41',
+  './js/auth.js?v=41',
+  './js/map.js?v=41',
+  './js/app.js?v=41',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

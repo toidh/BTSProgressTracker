@@ -508,7 +508,7 @@ const App = {
   // Update Progress Handler
   // ============================================================
   async handleUpdateProgress() {
-    if (Auth.getRole() === 'view') return App.showToast('Tài khoản của bạn chỉ có quyền xem, không được cập nhật', 'error');
+    if (Auth.getRole() !== 'admin') return App.showToast('Tài khoản của bạn không có quyền cập nhật tiến độ', 'error');
     const form = document.getElementById('update-form');
     const siteName = form.dataset.siteName;
     const progress4G = document.getElementById('update-4g').value;
@@ -564,6 +564,7 @@ const App = {
 
           // Update stats
           this.updateStats();
+        this.renderDashboard();
         }
 
         const msg = result.offline
@@ -661,6 +662,7 @@ const App = {
           this.sites = await DataService.fetchSites();
           MapManager.loadSites(this.sites);
           this.updateStats();
+        this.renderDashboard();
         } catch (e) {}
       }
     }, AppConfig.DATA_REFRESH_INTERVAL);
@@ -684,6 +686,7 @@ const App = {
           this.sites = await DataService.fetchSites();
           MapManager.loadSites(this.sites);
           this.updateStats();
+        this.renderDashboard();
         }
       }
     }, 2000);
@@ -1356,8 +1359,6 @@ const App = {
   // Site List & Details Modals
   // ============================================================
   showSiteList(filterId, title) {
-    if (Auth.getRole() !== 'admin') return;
-
     this.currentListFilter = filterId;
     this.currentListTitle = title;
     

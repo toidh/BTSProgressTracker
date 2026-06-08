@@ -1614,7 +1614,12 @@ body.modal-open {
 }
 
 /* Roles */
-body[data-role="view"] .admin-only {
+body[data-role="view"] .admin-only,
+body[data-role="view"] .export-btn {
+  display: none !important;
+}
+
+body[data-role="export"] .admin-only {
   display: none !important;
 }
 
