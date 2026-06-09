@@ -707,7 +707,7 @@ html, body {
 /* === Map Filter Bar === */
 .map-filter-bar {
   position: absolute;
-  top: 115px;
+  top: 100px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 999;

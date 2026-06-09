@@ -423,7 +423,7 @@ const App = {
     document.getElementById('modal-sdt-ft').textContent = site['SĐT FT'] || '-';
     document.getElementById('modal-tktu').textContent = site['TKTU ONSITE'] || '-';
     document.getElementById('modal-sdt-tktu').textContent = site['SĐT TKTU ONSITE'] || '-';
-    document.getElementById('modal-note-tktu').textContent = site['NOTE TKTU'] || '-';
+    document.getElementById('modal-note-tktu').textContent = site['NOTE'] || site['NOTE TKTU'] || '-';
 
     // Last update info
     const lastUser = site['User cập nhật'] || '-';
@@ -894,13 +894,16 @@ const App = {
       return nameA.localeCompare(nameB, 'vi');
     });
 
+    const tLen = planSites.length;
+    const calcPct = (v) => tLen > 0 ? ((v / tLen) * 100).toFixed(2) : '0.00';
+    
     el.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; gap:10px;">
         <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;flex:1;">
-          📋 Kế hoạch: <strong style="color:var(--color-blue)" class="clickable-number" onclick="App.showSiteList('daily_plan_all', 'Tất cả (Kế hoạch ngày)')">${planSites.length}</strong> trạm |
-          Hoàn thành: <strong style="color:var(--color-green)" class="clickable-number" onclick="App.showSiteList('daily_plan_completed', 'Hoàn thành (Kế hoạch ngày)')">${planCompleted}</strong> |
-          Đang thực hiện: <strong style="color:var(--color-red)" class="clickable-number" onclick="App.showSiteList('daily_plan_in_progress', 'Đang thực hiện (Kế hoạch ngày)')">${planInProgress}</strong> |
-          Chưa thực hiện: <strong style="color:var(--text-muted)" class="clickable-number" onclick="App.showSiteList('daily_plan_pending', 'Chưa thực hiện (Kế hoạch ngày)')">${planNotStarted}</strong><br>
+          📋 Kế hoạch: <strong style="color:var(--color-blue)" class="clickable-number" onclick="App.showSiteList('daily_plan_all', 'Tất cả (Kế hoạch ngày)')">${tLen}</strong> trạm |
+          Hoàn thành: <strong style="color:var(--color-green)" class="clickable-number" onclick="App.showSiteList('daily_plan_completed', 'Hoàn thành (Kế hoạch ngày)')">${planCompleted} (${calcPct(planCompleted)}%)</strong> |
+          Đang thực hiện: <strong style="color:var(--color-red)" class="clickable-number" onclick="App.showSiteList('daily_plan_in_progress', 'Đang thực hiện (Kế hoạch ngày)')">${planInProgress} (${calcPct(planInProgress)}%)</strong> |
+          Chưa thực hiện: <strong style="color:var(--text-muted)" class="clickable-number" onclick="App.showSiteList('daily_plan_pending', 'Chưa thực hiện (Kế hoạch ngày)')">${planNotStarted} (${calcPct(planNotStarted)}%)</strong><br>
           4G: <strong style="color:var(--color-blue)">${plan4gDone}/${planTotal4g}</strong> |
           5G: <strong style="color:var(--color-purple)">${plan5gDone}/${planTotal5g}</strong>
         </div>
@@ -1205,7 +1208,11 @@ const App = {
       else cats[c].p++;
     });
 
-    const catLabels = Object.keys(cats);
+    const catLabels = Object.keys(cats).sort((a, b) => {
+      const tA = cats[a].comp + cats[a].ip + cats[a].p;
+      const tB = cats[b].comp + cats[b].ip + cats[b].p;
+      return tA - tB;
+    });
     const catComp = catLabels.map(c => cats[c].comp);
     const catIp = catLabels.map(c => cats[c].ip);
     const catP = catLabels.map(c => cats[c].p);
@@ -1271,7 +1278,7 @@ const App = {
     pKeys.sort((a, b) => {
       const pA = partners[a].total > 0 ? (partners[a].comp / partners[a].total) : 0;
       const pB = partners[b].total > 0 ? (partners[b].comp / partners[b].total) : 0;
-      return pB - pA;
+      return pA - pB;
     });
 
     const pLabels = pKeys;
