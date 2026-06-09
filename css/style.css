@@ -1348,10 +1348,7 @@ body.modal-open {
 .dashboard-header h2 {
   font-size: 20px;
   font-weight: 800;
-  background: linear-gradient(135deg, var(--color-blue), var(--color-purple));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--color-blue);
 }
 
 /* === Summary Cards === */
