@@ -1799,7 +1799,14 @@ const App = {
 
     try {
       const result = await DataService.apiCall({ action: 'getDiagrams', site: siteName });
-      if (!result.success || !result.diagrams || result.diagrams.length === 0) {
+      
+      if (!result.success) {
+        console.error('[Diagrams API Error]:', result.error || result.message);
+        container.innerHTML = `<div style="padding:12px;color:var(--color-danger);font-size:13px;">Lỗi: ${result.error || result.message || 'Lý do không xác định (Vui lòng cấp quyền DriveApp trong Apps Script)'}</div>`;
+        return;
+      }
+
+      if (!result.diagrams || result.diagrams.length === 0) {
         container.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px;">Chưa có sơ đồ đấu nối cho trạm này.</div>';
         return;
       }
