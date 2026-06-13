@@ -1,7 +1,7 @@
 {
-  "name": "BTS Progress Tracker",
-  "short_name": "BTS Tracker",
-  "description": "Ứng dụng báo cáo tiến độ SWAP trạm BTS",
+  "name": "RolloutOps Pro",
+  "short_name": "RolloutOps",
+  "description": "Ứng dụng quản lý, hỗ trợ và cập nhật tiến độ triển khai mạng lưới",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",

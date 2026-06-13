@@ -280,11 +280,17 @@ const App = {
     this.showLoading('Đang tải dữ liệu...');
     try {
       this.sites = await DataService.fetchSites();
-      MapManager.loadSites(this.sites);
-      this.updateStats();
 
-      // Load sectors
-      DataService.fetchSectors().then(sectors => MapManager.loadSectors(sectors));
+      // view_limited: don't load markers or sectors, map stays empty
+      if (Auth.getRole() !== 'view_limited') {
+        MapManager.loadSites(this.sites);
+        this.updateStats();
+        // Load sectors
+        DataService.fetchSectors().then(sectors => MapManager.loadSectors(sectors));
+      } else {
+        // Still load sector data in background so we can show per-site sectors later
+        DataService.fetchSectors().then(sectors => MapManager.setSectorData(sectors));
+      }
 
       // Sync pending updates
       const pending = Storage.getPendingUpdates();
@@ -293,7 +299,9 @@ const App = {
         if (syncResult.synced > 0) {
           this.showToast(`Đã đồng bộ ${syncResult.synced} cập nhật offline`, 'success');
           this.sites = await DataService.fetchSites();
-          MapManager.loadSites(this.sites);
+          if (Auth.getRole() !== 'view_limited') {
+            MapManager.loadSites(this.sites);
+          }
         }
       }
 
@@ -356,7 +364,17 @@ const App = {
   selectSearchResult(siteName) {
     document.getElementById('search-input').value = siteName;
     document.getElementById('search-results').classList.remove('visible');
-    MapManager.flyToSite(siteName);
+
+    // view_limited: load only this single site marker + its sectors
+    if (Auth.getRole() === 'view_limited') {
+      const site = this.sites.find(s => s['Site'] === siteName);
+      if (site) {
+        MapManager.loadSingleSite(site);
+        MapManager.loadSectorsForSite(siteName);
+      }
+    } else {
+      MapManager.flyToSite(siteName);
+    }
   },
 
   // ============================================================
@@ -425,6 +443,11 @@ const App = {
     document.getElementById('modal-sdt-tktu').textContent = site['SĐT TKTU ONSITE'] || '-';
     document.getElementById('modal-note-tktu').textContent = site['NOTE'] || site['NOTE TKTU'] || '-';
 
+    // Integration Info
+    document.getElementById('modal-ip').textContent = site['IP'] || '-';
+    document.getElementById('modal-srt').textContent = site['SRT'] || '-';
+    document.getElementById('modal-port').textContent = site['Port'] || '-';
+
     // Last update info
     const lastUser = site['User cập nhật'] || '-';
     const lastDate = site['Ngày cập nhật'] || '-';
@@ -474,7 +497,15 @@ const App = {
     // Show modal
     modal.classList.add('visible');
     document.body.classList.add('modal-open');
-    // alert('Popup đã bật visible thành công!');
+
+    // Load weather forecast
+    this.loadWeatherForecast(site['Lat'], site['Long']);
+
+    // Load diagrams
+    this.loadDiagrams(site['Site']);
+
+    // Load config file link
+    this.loadSiteConfig(site['Site']);
   },
 
   setupCallButtons(site) {
@@ -626,11 +657,15 @@ const App = {
       }
 
       this.sites = await DataService.fetchSites();
-      MapManager.loadSites(this.sites);
-      this.updateStats();
-
-      // Reload sectors
-      DataService.fetchSectors().then(sectors => MapManager.loadSectors(sectors));
+      
+      if (Auth.getRole() !== 'view_limited') {
+        MapManager.loadSites(this.sites);
+        this.updateStats();
+        // Reload sectors
+        DataService.fetchSectors().then(sectors => MapManager.loadSectors(sectors));
+      } else {
+        DataService.fetchSectors().then(sectors => MapManager.setSectorData(sectors));
+      }
 
       this.showToast('Đã cập nhật dữ liệu', 'success');
     } catch (error) {
@@ -660,9 +695,11 @@ const App = {
       if (this.isOnline) {
         try {
           this.sites = await DataService.fetchSites();
-          MapManager.loadSites(this.sites);
-          this.updateStats();
-        this.renderDashboard();
+          if (Auth.getRole() !== 'view_limited') {
+            MapManager.loadSites(this.sites);
+            this.updateStats();
+            this.renderDashboard();
+          }
         } catch (e) {}
       }
     }, AppConfig.DATA_REFRESH_INTERVAL);
@@ -684,9 +721,11 @@ const App = {
         if (result.synced > 0) {
           this.showToast(`Đã đồng bộ ${result.synced} cập nhật offline`, 'success');
           this.sites = await DataService.fetchSites();
-          MapManager.loadSites(this.sites);
-          this.updateStats();
-        this.renderDashboard();
+          if (Auth.getRole() !== 'view_limited') {
+            MapManager.loadSites(this.sites);
+            this.updateStats();
+            this.renderDashboard();
+          }
         }
       }
     }, 2000);
@@ -764,6 +803,7 @@ const App = {
   // DASHBOARD
   // ============================================================
   openDashboard() {
+    if (Auth.getRole() === 'view_limited') return this.showToast('Tài khoản của bạn không có quyền xem Dashboard', 'error');
     this.renderDashboard();
     document.getElementById('dashboard-overlay').classList.add('visible');
   },
@@ -1531,7 +1571,8 @@ const App = {
   },
 
   exportDashboardPDF() {
-    if (Auth.getRole() === 'view') return App.showToast('Tài khoản của bạn chỉ có quyền xem, không được xuất dữ liệu', 'error');
+    const role = Auth.getRole();
+    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.html2pdf) return App.showToast('Lỗi: Thư viện PDF chưa tải', 'error');
     const element = document.querySelector('.dashboard-container');
     const opt = {
@@ -1545,7 +1586,8 @@ const App = {
   },
 
   exportDashboardExcel() {
-    if (Auth.getRole() === 'view') return App.showToast('Tài khoản của bạn chỉ có quyền xem, không được xuất dữ liệu', 'error');
+    const role = Auth.getRole();
+    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     
     const wb = XLSX.utils.book_new();
@@ -1575,7 +1617,8 @@ const App = {
   },
 
   exportListExcel() {
-    if (Auth.getRole() === 'view') return App.showToast('Tài khoản của bạn chỉ có quyền xem, không được xuất dữ liệu', 'error');
+    const role = Auth.getRole();
+    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     if (!this.currentListData || this.currentListData.length === 0) return App.showToast('Không có dữ liệu', 'error');
     
@@ -1592,7 +1635,8 @@ const App = {
   },
 
   exportDetailExcel() {
-    if (Auth.getRole() === 'view') return App.showToast('Tài khoản của bạn chỉ có quyền xem, không được xuất dữ liệu', 'error');
+    const role = Auth.getRole();
+    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     if (!this.currentDetailSite) return;
 
@@ -1613,7 +1657,8 @@ const App = {
   },
 
   exportDetailPDF() {
-    if (Auth.getRole() === 'view') return App.showToast('Tài khoản của bạn chỉ có quyền xem, không được xuất dữ liệu', 'error');
+    const role = Auth.getRole();
+    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.html2pdf) return App.showToast('Lỗi: Thư viện PDF chưa tải', 'error');
     const element = document.querySelector('#detail-modal .modal-body');
     const opt = {
@@ -1624,6 +1669,253 @@ const App = {
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     html2pdf().set(opt).from(element).save();
+  },
+
+  // ============================================================
+  // Weather Forecast (Open-Meteo API)
+  // ============================================================
+  async loadWeatherForecast(lat, lng) {
+    const container = document.getElementById('weather-content');
+    const section = document.getElementById('weather-section');
+    if (!container || !section) return;
+
+    // Reset
+    container.innerHTML = '<div class="weather-loading"><div class="spinner-small"></div><span>Đang tải thời tiết...</span></div>';
+    const labelEl = document.getElementById('weather-active-label');
+    if (labelEl) labelEl.textContent = '';
+
+    if (!navigator.onLine) {
+      container.innerHTML = '<div class="weather-offline">📴 Không thể tải thời tiết (offline)</div>';
+      return;
+    }
+
+    if (!lat || !lng || isNaN(parseFloat(lat)) || isNaN(parseFloat(lng))) {
+      container.innerHTML = '<div class="weather-offline">Không có tọa độ trạm</div>';
+      return;
+    }
+
+    try {
+      const url = `${AppConfig.WEATHER_API}?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,precipitation,weather_code,wind_speed_10m&forecast_hours=24&timezone=Asia/Ho_Chi_Minh`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('API error');
+      const data = await response.json();
+
+      if (!data.hourly || !data.hourly.time) {
+        container.innerHTML = '<div class="weather-offline">Không có dữ liệu thời tiết</div>';
+        return;
+      }
+
+      const times = data.hourly.time;
+      const temps = data.hourly.temperature_2m;
+      const precips = data.hourly.precipitation;
+      const codes = data.hourly.weather_code;
+      const winds = data.hourly.wind_speed_10m;
+
+      let html = '<div class="weather-scroll"><div class="weather-grid">';
+      for (let i = 0; i < times.length; i++) {
+        const time = new Date(times[i]);
+        const hour = String(time.getHours()).padStart(2, '0') + ':00';
+        let rainClass = '';
+        if (precips[i] > 0) {
+          if (codes[i] >= 51 && codes[i] <= 57) {
+            rainClass = 'weather-drizzle';
+          } else {
+            rainClass = 'weather-rain';
+          }
+        }
+        const icon = this.getWeatherIcon(codes[i]);
+        const label = this.getWeatherLabel(codes[i]);
+
+        html += `
+          <div class="weather-hour ${rainClass}" title="${label}" onclick="document.getElementById('weather-active-label').textContent = '${hour} - ${label}'">
+            <div class="weather-time">${hour}</div>
+            <div class="weather-icon">${icon}</div>
+            <div class="weather-temp">${Math.round(temps[i])}°</div>
+            <div class="weather-precip">${precips[i] > 0 ? precips[i].toFixed(1) + 'mm' : '-'}</div>
+            <div class="weather-wind">${Math.round(winds[i])}km/h</div>
+          </div>
+        `;
+      }
+      html += '</div></div>';
+      container.innerHTML = html;
+    } catch (error) {
+      console.error('[Weather] Error:', error);
+      container.innerHTML = '<div class="weather-offline">⚠️ Không thể tải thời tiết</div>';
+    }
+  },
+
+  getWeatherIcon(code) {
+    // WMO Weather interpretation codes
+    if (code === 0) return '☀️';
+    if (code === 1) return '🌤️';
+    if (code === 2) return '⛅';
+    if (code === 3) return '☁️';
+    if (code >= 45 && code <= 48) return '🌫️';
+    if (code >= 51 && code <= 55) return '🌦️';
+    if (code >= 56 && code <= 57) return '🌧️';
+    if (code >= 61 && code <= 65) return '🌧️';
+    if (code >= 66 && code <= 67) return '🌨️';
+    if (code >= 71 && code <= 77) return '❄️';
+    if (code >= 80 && code <= 82) return '🌧️';
+    if (code >= 85 && code <= 86) return '🌨️';
+    if (code >= 95) return '⛈️';
+    return '🌡️';
+  },
+
+  getWeatherLabel(code) {
+    if (code === 0) return 'Trời quang';
+    if (code === 1) return 'Ít mây';
+    if (code === 2) return 'Mây rải rác';
+    if (code === 3) return 'Nhiều mây';
+    if (code >= 45 && code <= 48) return 'Sương mù';
+    if (code >= 51 && code <= 55) return 'Mưa phùn';
+    if (code >= 56 && code <= 57) return 'Mưa phùn đóng băng';
+    if (code >= 61 && code <= 63) return 'Mưa nhỏ';
+    if (code >= 64 && code <= 65) return 'Mưa lớn';
+    if (code >= 66 && code <= 67) return 'Mưa đóng băng';
+    if (code >= 71 && code <= 77) return 'Tuyết';
+    if (code >= 80 && code <= 82) return 'Mưa rào';
+    if (code >= 85 && code <= 86) return 'Mưa tuyết';
+    if (code >= 95) return 'Giông bão';
+    return 'Không rõ';
+  },
+
+  // ============================================================
+  // Diagrams (Google Drive auto-lookup)
+  // ============================================================
+  async loadDiagrams(siteName) {
+    const section = document.getElementById('diagram-section');
+    const container = document.getElementById('diagram-content');
+    if (!section || !container) return;
+
+    // Always show the section now
+    section.style.display = '';
+    container.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px;">Đang tải sơ đồ...</div>';
+
+    if (!navigator.onLine) {
+      container.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px;">📴 Offline</div>';
+      return;
+    }
+
+    try {
+      const result = await DataService.apiCall({ action: 'getDiagrams', site: siteName });
+      if (!result.success || !result.diagrams || result.diagrams.length === 0) {
+        container.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px;">Chưa có sơ đồ đấu nối cho trạm này.</div>';
+        return;
+      }
+
+      let html = '<div class="diagram-grid">';
+
+      result.diagrams.forEach((diag, idx) => {
+        const isImage = diag.mimeType && diag.mimeType.startsWith('image/');
+        const isPDF = diag.mimeType && diag.mimeType === 'application/pdf';
+        const previewUrl = `https://drive.google.com/file/d/${diag.id}/preview`;
+        const thumbUrl = `https://lh3.googleusercontent.com/d/${diag.id}=w400`;
+
+        if (isImage) {
+          html += `
+            <div class="diagram-item" onclick="App.openDiagramViewer('${diag.id}', 'image')">
+              <img src="${thumbUrl}" alt="${diag.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'diagram-error\\'>Không tải được ảnh</div>'">
+              <div class="diagram-name">${diag.name}</div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="diagram-item" onclick="App.openDiagramViewer('${diag.id}', '${isPDF ? 'pdf' : 'other'}')">
+              <div class="diagram-file-icon">${isPDF ? '📄' : '📎'}</div>
+              <div class="diagram-name">${diag.name}</div>
+            </div>
+          `;
+        }
+      });
+
+      html += '</div>';
+      container.innerHTML = html;
+    } catch (error) {
+      console.error('[Diagrams] Error:', error);
+    }
+  },
+
+  openDiagramViewer(fileId, type) {
+    const previewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    const directUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+
+    // Create fullscreen overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'diagram-viewer-overlay';
+    overlay.innerHTML = `
+      <div class="diagram-viewer-header">
+        <button class="diagram-viewer-close" onclick="App.closeDiagramViewer()">✕</button>
+        <a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" class="diagram-viewer-open">↗ Mở trong Drive</a>
+      </div>
+      <div class="diagram-viewer-content" id="diagram-viewer-content" style="overflow: hidden; display: flex; align-items: center; justify-content: center; height: 90vh;">
+        ${type === 'image'
+          ? `<img id="diagram-zoom-img" src="${directUrl}" alt="Sơ đồ đấu nối" style="max-width:100%;max-height:100%;object-fit:contain;">`
+          : `<iframe src="${previewUrl}" style="width:100%;height:100%;border:none;border-radius:8px;"></iframe>`
+        }
+      </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+      // Only close if clicking outside the image/iframe
+      if (e.target === overlay || e.target.className === 'diagram-viewer-content') App.closeDiagramViewer();
+    });
+
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible');
+      
+      // Initialize Panzoom for images after it loads
+      if (type === 'image' && window.Panzoom) {
+        const img = document.getElementById('diagram-zoom-img');
+        const content = document.getElementById('diagram-viewer-content');
+        if (img && content) {
+          img.onload = () => {
+            const panzoom = Panzoom(img, {
+              maxScale: 10,
+              minScale: 1,
+              startScale: 1,
+              step: 0.3
+            });
+            content.addEventListener('wheel', panzoom.zoomWithWheel);
+          };
+          // Fallback if image is already cached
+          if (img.complete) {
+            img.onload();
+          }
+        }
+      }
+    });
+  },
+
+  closeDiagramViewer() {
+    const overlay = document.querySelector('.diagram-viewer-overlay');
+    if (overlay) {
+      overlay.classList.remove('visible');
+      setTimeout(() => overlay.remove(), 300);
+    }
+  },
+
+  // ============================================================
+  // Configuration File (Google Drive)
+  // ============================================================
+  async loadSiteConfig(siteName) {
+    const btnContainer = document.getElementById('config-btn-container');
+    const btn = document.getElementById('modal-config-btn');
+    if (!btnContainer || !btn) return;
+
+    btnContainer.style.display = 'none';
+    if (!navigator.onLine) return;
+
+    try {
+      const result = await DataService.apiCall({ action: 'getConfig', site: siteName });
+      if (result.success && result.url) {
+        btn.href = result.url;
+        btnContainer.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('[Config] Error:', error);
+    }
   }
 };
 
@@ -1633,14 +1925,3 @@ const App = {
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
-
-
-
-
-
-
-
-
-
-
-

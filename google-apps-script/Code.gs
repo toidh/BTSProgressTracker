@@ -1,9 +1,9 @@
 /**
- * BTS Progress Tracker - Google Apps Script Backend
+ * RolloutOps Pro - Google Apps Script Backend
  * 
  * SETUP INSTRUCTIONS:
- * 1. Open Google Sheets file "Báo cáo tiến độ SWAP.xlsx"
- * 2. Create a new sheet named "Users" with columns: Username | Password | DisplayName
+ * 1. Open Google Sheets file "Báo cáo tiến độ triển khai.xlsx"
+ * 2. Create a new sheet named "Users" with columns: Username | Password | DisplayName | Role
  * 3. Add user accounts to the Users sheet
  * 4. Go to Extensions > Apps Script
  * 5. Paste this entire code into the script editor
@@ -13,7 +13,11 @@
  * 9. Who has access: Anyone
  * 10. Click Deploy and copy the URL
  * 11. Paste the URL into the PWA config
+ * 12. (Optional) Create a Google Drive folder for diagrams, put folder ID in DIAGRAMS_FOLDER_ID below
  */
+
+// ⚠️ DÁN FOLDER ID GOOGLE DRIVE CHỨA SƠ ĐỒ ĐẤU NỐI VÀO ĐÂY:
+var DIAGRAMS_FOLDER_ID = '1R9ULCgky45NaZXaIdifZ6-tsVJ65CFdi';
 
 // ============================================================
 // CONFIGURATION
@@ -46,8 +50,14 @@ function doGet(e) {
       case 'getSectors':
         result = getSectors();
         break;
+      case 'getDiagrams':
+        result = getDiagrams(e.parameter.site);
+        break;
+      case 'getConfig':
+        result = getConfig(e.parameter.site);
+        break;
       default:
-        result = { success: false, error: 'Invalid action. Available: getSites, getSectors, login, ping' };
+        result = { success: false, error: 'Invalid action. Available: getSites, getSectors, login, ping, getDiagrams, getConfig' };
     }
 
     return ContentService
@@ -367,6 +377,87 @@ function batchUpdate(data) {
     message: `Đã cập nhật ${successCount}/${results.length} trạm`,
     results: results
   };
+}
+
+// ============================================================
+// GET DIAGRAMS FROM GOOGLE DRIVE
+// ============================================================
+
+function getDiagrams(siteName) {
+  if (!siteName) {
+    return { success: false, error: 'Site name is required' };
+  }
+  if (!DIAGRAMS_FOLDER_ID) {
+    return { success: true, diagrams: [], message: 'Diagrams folder not configured' };
+  }
+
+  try {
+    var folder = DriveApp.getFolderById(DIAGRAMS_FOLDER_ID);
+    // Search for files whose name starts with the station code
+    var searchQuery = 'title contains "' + siteName.replace(/"/g, '') + '"';
+    var files = folder.searchFiles(searchQuery);
+    var diagrams = [];
+
+    while (files.hasNext()) {
+      var file = files.next();
+      var fileName = file.getName();
+      // Match if filename starts with exact sitename, avoiding partial matches like CMU0166 matching CMU0166-11
+      // We check that the character following the site name is not alphanumeric and not a hyphen.
+      // E.g., allowed: CMU0166.jpg, CMU0166_2.pdf, CMU0166 (1).png
+      // Not allowed: CMU0166-11.jpg, CMU0166A.jpg
+      var regex = new RegExp('^' + siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![a-zA-Z0-9\\-])', 'i');
+      if (regex.test(fileName)) {
+        diagrams.push({
+          name: fileName,
+          id: file.getId(),
+          mimeType: file.getMimeType(),
+          url: file.getUrl(),
+          size: file.getSize()
+        });
+      }
+    }
+
+    // Sort by name
+    diagrams.sort(function(a, b) { return a.name.localeCompare(b.name); });
+
+    return { success: true, diagrams: diagrams };
+  } catch (e) {
+    return { success: false, error: 'Error accessing Drive folder: ' + e.message };
+  }
+}
+
+// ============================================================
+// GET CONFIG FILE
+// ============================================================
+
+function getConfig(siteName) {
+  if (!siteName) return { success: false, error: 'Missing site parameter' };
+  
+  // Look for a sheet named 'Config' (or fallback names)
+  var sheet = getSpreadsheet().getSheetByName('Config') || getSpreadsheet().getSheetByName('Map_config');
+  if (!sheet) {
+    return { success: false, error: 'Không tìm thấy sheet "Config"' };
+  }
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: true, url: '' };
+
+  const headers = data[0].map(h => String(h).trim());
+  const siteIdx = headers.indexOf('Site');
+  const urlIdx = headers.indexOf('URL');
+  
+  if (siteIdx === -1 || urlIdx === -1) {
+    return { success: false, error: 'Thiếu cột Site hoặc URL trong sheet Config' };
+  }
+
+  for (let i = 1; i < data.length; i++) {
+    const rowSite = String(data[i][siteIdx]).trim();
+    if (rowSite.toUpperCase() === siteName.toUpperCase()) {
+      return { success: true, url: String(data[i][urlIdx]).trim() };
+    }
+  }
+
+  return { success: true, url: '' };
 }
 
 // ============================================================

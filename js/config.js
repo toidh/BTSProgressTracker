@@ -9,7 +9,7 @@ const AppConfig = {
   API_URL: 'https://script.google.com/macros/s/AKfycbzzGJxszhb1vbNKF-f4NZ6QyadEem8TGWCDL1Vbsz4UJwMB0DhAEItEqFjQUHN9YuqidQ/exec',
 
   // App info
-  APP_NAME: 'SWAP Progress Tracker',
+  APP_NAME: 'RolloutOps Pro',
   APP_VERSION: '2.0.0',
 
   // Map defaults (centered on Bạc Liêu province)
@@ -40,6 +40,12 @@ const AppConfig = {
     DANGER: '#b91c1c',
     ACCENT: '#7c3aed',
   },
+
+  // ⚠️ DÁN FOLDER ID GOOGLE DRIVE CHỨA SƠ ĐỒ ĐẤU NỐI VÀO ĐÂY (phải trùng với Code.gs):
+  DIAGRAMS_FOLDER_ID: '1R9ULCgky45NaZXaIdifZ6-tsVJ65CFdi',
+
+  // Weather API (Open-Meteo - free, no API key required)
+  WEATHER_API: 'https://api.open-meteo.com/v1/forecast',
 
   // LocalStorage keys
   STORAGE_KEYS: {

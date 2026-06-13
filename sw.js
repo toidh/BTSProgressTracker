@@ -1,20 +1,21 @@
-const CACHE_NAME = 'bts-tracker-v43';
+const CACHE_NAME = 'rolloutops-v46';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './css/style.css',
-  './js/config.js?v=43',
-  './js/storage.js?v=43',
-  './js/data.js?v=43',
-  './js/auth.js?v=43',
-  './js/map.js?v=43',
-  './js/app.js?v=43',
+  './js/config.js?v=45',
+  './js/storage.js?v=45',
+  './js/data.js?v=45',
+  './js/auth.js?v=45',
+  './js/map.js?v=45',
+  './js/app.js?v=45',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
+  'https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap'
 ];
 
 // Install - cache assets

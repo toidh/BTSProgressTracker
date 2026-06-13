@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="Báo cáo tiến độ SWAP 4G/5G">
+  <meta name="description" content="Ứng dụng quản lý, hỗ trợ và cập nhật tiến độ triển khai mạng lưới">
   <meta name="theme-color" content="#0a0e1a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>BTS Progress Tracker</title>
+  <title>RolloutOps Pro</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -39,7 +39,7 @@
     <div class="login-container">
       <div class="login-logo">
         <span class="login-logo-icon">📡</span>
-        <h1>BTS Progress Tracker</h1>
+        <h1>RolloutOps Pro</h1>
       </div>
       <div class="login-card">
         <form id="login-form">
@@ -179,6 +179,50 @@
               <div class="info-item-label">Đối tác</div>
               <div class="info-item-value" id="modal-doi-tac">-</div>
             </div>
+          </div>
+        </div>
+
+        <!-- Weather Forecast -->
+        <div class="info-section" id="weather-section">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 8px;">
+            <div class="info-section-title" style="margin-bottom:0;">🌤️ Thời tiết 24h tới</div>
+            <div id="weather-active-label" style="font-size:12px; color:var(--color-blue); font-weight:600; min-height:15px; text-align:right;"></div>
+          </div>
+          <div id="weather-content">
+            <div class="weather-loading">
+              <div class="spinner-small"></div>
+              <span>Đang tải thời tiết...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection Diagrams -->
+        <div class="info-section" id="diagram-section">
+          <div class="info-section-title">📋 Sơ đồ đấu nối</div>
+          <div id="diagram-content"></div>
+        </div>
+
+        <!-- Integration Info -->
+        <div class="info-section">
+          <div class="info-section-title">🔌 Thông tin tích hợp</div>
+          <div class="info-grid info-grid-3col">
+            <div class="info-item">
+              <div class="info-item-label">IP</div>
+              <div class="info-item-value" id="modal-ip">-</div>
+            </div>
+            <div class="info-item">
+              <div class="info-item-label">SRT</div>
+              <div class="info-item-value" id="modal-srt">-</div>
+            </div>
+            <div class="info-item">
+              <div class="info-item-label">Port</div>
+              <div class="info-item-value" id="modal-port">-</div>
+            </div>
+          </div>
+          <div id="config-btn-container" style="margin-top: 15px; display: none;">
+            <a href="#" id="modal-config-btn" target="_blank" class="btn btn-secondary" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+              <span>📥</span> Tải File Cấu Hình
+            </a>
           </div>
         </div>
 
@@ -403,11 +447,12 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="js/config.js?v=43"></script>
-  <script src="js/storage.js?v=43"></script>
-  <script src="js/data.js?v=43"></script>
-  <script src="js/auth.js?v=43"></script>
-  <script src="js/map.js?v=43"></script>
-  <script src="js/app.js?v=43"></script>
+  <script src="js/config.js?v=44"></script>
+  <script src="js/storage.js?v=44"></script>
+  <script src="js/data.js?v=44"></script>
+  <script src="js/auth.js?v=44"></script>
+  <script src="js/map.js?v=44"></script>
+  <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+  <script src="js/app.js?v=45"></script>
 </body>
 </html>

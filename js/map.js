@@ -455,7 +455,7 @@ const MapManager = {
     }
   },
 
-  loadSectors(sectors) {
+  setSectorData(sectors) {
     const data = sectors || [];
     const getOrder = (type) => {
       if (type === '5g') return 1;
@@ -468,6 +468,10 @@ const MapManager = {
       return getOrder(typeA) - getOrder(typeB);
     });
     this.sectorData = data;
+  },
+
+  loadSectors(sectors) {
+    this.setSectorData(sectors);
     this.renderSectors();
   },
 
@@ -560,6 +564,96 @@ const MapManager = {
       this.sectorLayer.clearLayers();
     }
     return this.sectorsVisible;
+  },
+
+  // ============================================================
+  // Load Single Site (for view_limited role)
+  // ============================================================
+  loadSingleSite(site) {
+    this.markerLayer.clearLayers();
+    this.markers = {};
+
+    const lat = parseFloat(site['Lat']);
+    const lng = parseFloat(site['Long']);
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+
+    const siteName = site['Site'] || 'Unknown';
+    const status = DataService.getSiteStatus(site);
+    const color = DataService.getStatusColor(status, site);
+    const isDailyPlan = DataService.isDailyPlan(site);
+
+    const icon = this.createBTSIcon(status, color, siteName, isDailyPlan);
+    const marker = L.marker([lat, lng], { icon: icon });
+
+    marker.on('click', () => {
+      App.showSiteDetail(site);
+    });
+
+    marker.addTo(this.markerLayer);
+    this.markers[siteName] = { marker, site };
+
+    // Fly to the site
+    this.map.flyTo([lat, lng], 17, { duration: 1 });
+  },
+
+  // ============================================================
+  // Load Sectors for a specific site only (for view_limited role)
+  // ============================================================
+  loadSectorsForSite(siteName) {
+    this.sectorLayer.clearLayers();
+    if (!this.sectorData.length) return;
+
+    const upperName = siteName.toUpperCase();
+    this.sectorData.forEach(sector => {
+      const sectorSiteName = String(sector['Site'] || sector['Mã trạm'] || sector['Mã Trạm'] || '').trim().toUpperCase();
+      if (sectorSiteName !== upperName) return;
+
+      const lat = parseFloat(sector['Lat']);
+      const lng = parseFloat(sector['Long']);
+      const azimuth = parseFloat(sector['Azimuth']) || 0;
+      if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+
+      const sectorName = sector['Sector'] || '';
+      const type = this.getSectorType(sectorName);
+      const color = this.getSectorColor(type);
+      const origin = [lat, lng];
+
+      let shape;
+      if (type === '5g') {
+        const endPt = this.destinationPoint(lat, lng, azimuth, 235);
+        shape = L.polyline([origin, endPt], {
+          color: color, weight: 3, opacity: 0.85,
+        });
+      } else {
+        const beamWidth = 30;
+        const length = type === '4g700' ? 200 : 130;
+        const arcPts = [origin];
+        for (let a = azimuth - beamWidth; a <= azimuth + beamWidth; a += 5) {
+          arcPts.push(this.destinationPoint(lat, lng, a, length));
+        }
+        arcPts.push(origin);
+        shape = L.polygon(arcPts, {
+          color: color, fillColor: color,
+          fillOpacity: 0.18, weight: 1.5, opacity: 0.7,
+        });
+      }
+
+      const val = (v) => (v !== undefined && v !== null && String(v).trim() !== '') ? v : '-';
+      shape.bindPopup(`
+        <div style="font-family:'Inter',sans-serif;font-size:12px;min-width:180px;">
+          <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:${color};">${sectorName}</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cấu hình mới</td><td style="font-weight:600;">${val(sector['Cấu hình mới'])}</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cao/chân cột</td><td style="font-weight:600;">${val(sector['Độ cao so với chân cột'])} m</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Cao/mặt đất</td><td style="font-weight:600;">${val(sector['Độ cao so với mặt đất'])} m</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Azimuth</td><td style="font-weight:600;">${val(sector['Azimuth'])}°</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Tilt cơ</td><td style="font-weight:600;">${val(sector['Tilt cơ'])}°</td></tr>
+            <tr><td style="color:#94a3b8;padding:2px 8px 2px 0;">Tilt điện</td><td style="font-weight:600;">${val(sector['Tilt điện'])}°</td></tr>
+          </table>
+        </div>
+      `);
+      shape.addTo(this.sectorLayer);
+    });
   },
 
   // ============================================================
