@@ -86,7 +86,10 @@ const App = {
     // === Search ===
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
-      searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+      searchInput.addEventListener('input', (e) => {
+        this.handleSearch(e.target.value);
+      });
+      
       searchInput.addEventListener('focus', () => {
         document.getElementById('search-results').classList.add('visible');
       });
@@ -279,17 +282,20 @@ const App = {
     // Load data
     this.showLoading('Đang tải dữ liệu...');
     try {
-      this.sites = await DataService.fetchSites();
-
-      // view_limited: don't load markers or sectors, map stays empty
       if (Auth.getRole() !== 'view_limited') {
+        this.sites = await DataService.fetchSites();
         MapManager.loadSites(this.sites);
         this.updateStats();
         // Load sectors
         DataService.fetchSectors().then(sectors => MapManager.loadSectors(sectors));
       } else {
-        // Still load sector data in background so we can show per-site sectors later
-        DataService.fetchSectors().then(sectors => MapManager.setSectorData(sectors));
+        // Online-only view limited
+        this.sites = [];
+        this.siteDictionary = await DataService.fetchSiteDictionary();
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+          searchInput.placeholder = 'Nhập mã trạm để tìm kiếm...';
+        }
       }
 
       // Sync pending updates
@@ -320,8 +326,33 @@ const App = {
   },
 
   // ============================================================
-  // Search Handler
+  // Search Handlers
   // ============================================================
+  async searchOnline(query) {
+    query = query.trim();
+    if (!query) return;
+    this.showLoading('Đang tìm kiếm online...');
+    try {
+      const result = await DataService.searchSiteOnline(query);
+      this.hideLoading();
+      if (result.success && result.site) {
+        this.sites = [result.site];
+        MapManager.loadSingleSite(result.site);
+        if (result.sectors) {
+          MapManager.setSectorData(result.sectors);
+          MapManager.loadSectorsForSite(result.site['Site']);
+        }
+        document.getElementById('search-results').classList.remove('visible');
+        this.showToast('Đã tìm thấy trạm', 'success');
+      } else {
+        this.showToast(result.error || 'Không tìm thấy trạm', 'error');
+      }
+    } catch (e) {
+      this.hideLoading();
+      this.showToast('Lỗi tìm kiếm: ' + e.message, 'error');
+    }
+  },
+
   handleSearch(query) {
     const resultsEl = document.getElementById('search-results');
     if (!query || query.length < 1) {
@@ -331,6 +362,34 @@ const App = {
     }
 
     const q = query.toLowerCase();
+    
+    // View Limited Role uses Site Dictionary for fast autocomplete
+    if (Auth.getRole() === 'view_limited') {
+      const dict = this.siteDictionary || [];
+      const matches = dict.filter(name => name.toLowerCase().includes(q)).slice(0, 10);
+      
+      if (matches.length === 0) {
+        resultsEl.innerHTML = '<div class="search-no-result">Không tìm thấy trạm nào</div>';
+        resultsEl.classList.add('visible');
+        return;
+      }
+      
+      resultsEl.innerHTML = matches.map(siteName => {
+        return `
+          <div class="search-result-item" onclick="App.selectSearchResult('${siteName}')">
+            <div class="search-result-dot" style="background:var(--color-blue)"></div>
+            <div class="search-result-info">
+              <div class="search-result-name">${siteName}</div>
+              <div class="search-result-detail">Nhấn để tải dữ liệu trạm này</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      resultsEl.classList.add('visible');
+      return;
+    }
+
+    // Admin/Manager Role uses local full data
     const matches = this.sites.filter((s) => {
       const siteName = (s['Site'] || '').toLowerCase();
       const huyen = (s['Huyện'] || '').toLowerCase();
@@ -365,13 +424,9 @@ const App = {
     document.getElementById('search-input').value = siteName;
     document.getElementById('search-results').classList.remove('visible');
 
-    // view_limited: load only this single site marker + its sectors
+    // view_limited: fetch full data online and load it
     if (Auth.getRole() === 'view_limited') {
-      const site = this.sites.find(s => s['Site'] === siteName);
-      if (site) {
-        MapManager.loadSingleSite(site);
-        MapManager.loadSectorsForSite(siteName);
-      }
+      this.searchOnline(siteName);
     } else {
       MapManager.flyToSite(siteName);
     }

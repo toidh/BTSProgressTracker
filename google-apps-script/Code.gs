@@ -56,8 +56,14 @@ function doGet(e) {
       case 'getConfig':
         result = getConfig(e.parameter.site);
         break;
+      case 'searchSiteOnline':
+        result = searchSiteOnline(e.parameter.site);
+        break;
+      case 'getSiteDictionary':
+        result = getSiteDictionary();
+        break;
       default:
-        result = { success: false, error: 'Invalid action. Available: getSites, getSectors, login, ping, getDiagrams, getConfig' };
+        result = { success: false, error: 'Invalid action. Available: getSites, getSectors, login, ping, getDiagrams, getConfig, searchSiteOnline, getSiteDictionary' };
     }
 
     return ContentService
@@ -238,6 +244,146 @@ function getSectors() {
   }
 
   return { success: true, sectors: sectors };
+}
+
+// ============================================================
+// GET SITE DICTIONARY (For Autocomplete)
+// ============================================================
+
+function getSiteDictionary() {
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('Data') || ss.getSheetByName('Map_data');
+  if (!sheet) {
+    sheet = ss.getSheets()[0];
+    if (!sheet) return { success: false, error: 'No data sheet found' };
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: true, dictionary: [] };
+  
+  const headers = data[0].map(h => String(h).trim());
+  let siteColIdx = -1;
+  for (let j = 0; j < headers.length; j++) {
+    if (headers[j].toLowerCase() === 'site') {
+      siteColIdx = j;
+      break;
+    }
+  }
+  if (siteColIdx === -1) siteColIdx = 0;
+  
+  const dictionary = [];
+  for (let i = 1; i < data.length; i++) {
+    const siteName = String(data[i][siteColIdx]).trim();
+    if (siteName !== '') {
+      dictionary.push(siteName);
+    }
+  }
+  
+  return { success: true, dictionary: dictionary };
+}
+
+// ============================================================
+// SEARCH SINGLE SITE ONLINE (For View Limited Role)
+// ============================================================
+
+function searchSiteOnline(siteName) {
+  if (!siteName) {
+    return { success: false, error: 'Site name is required' };
+  }
+  siteName = siteName.trim().toUpperCase();
+  
+  // 1. Search Site Data
+  const ss = getSpreadsheet();
+  let sheet = ss.getSheetByName('Data') || ss.getSheetByName('Map_data');
+  if (!sheet) {
+    sheet = ss.getSheets()[0];
+    if (!sheet) return { success: false, error: 'No data sheet found' };
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: false, error: 'No data' };
+  
+  const headers = data[0].map(h => String(h).trim());
+  for (let i = 0; i < headers.length; i++) {
+    const norm = headers[i].toLowerCase().normalize('NFC').replace(/\s+/g, '');
+    if (norm === 'trạngthái' || norm === 'hoànthành' || norm === 'status') {
+      headers[i] = 'Status';
+    }
+  }
+  
+  // Find the column index for "Site"
+  let siteColIdx = -1;
+  for (let i = 0; i < headers.length; i++) {
+    if (headers[i].toLowerCase() === 'site') {
+      siteColIdx = i;
+      break;
+    }
+  }
+  if (siteColIdx === -1) siteColIdx = 0; // fallback to column A
+  
+  const tz = 'Asia/Ho_Chi_Minh';
+  let siteObject = null;
+  
+  // Find the site
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][siteColIdx]).trim().toUpperCase() === siteName) {
+      siteObject = {};
+      headers.forEach((header, j) => {
+        let value = data[i][j];
+        if (header === 'Long' || header === 'Lat') {
+          value = parseFloat(value) || 0;
+        } else if (value instanceof Date) {
+          value = Utilities.formatDate(value, tz, 'dd/MM/yyyy HH:mm:ss');
+        } else {
+          value = value !== null && value !== undefined ? String(value).trim() : '';
+        }
+        siteObject[header] = value;
+      });
+      break;
+    }
+  }
+  
+  if (!siteObject) {
+    return { success: false, error: 'Không tìm thấy trạm ' + siteName };
+  }
+  
+  // 2. Search Sectors
+  let sectors = [];
+  const secSheet = getSpreadsheet().getSheetByName('Map_sector');
+  if (secSheet) {
+    const secData = secSheet.getDataRange().getValues();
+    if (secData.length >= 2) {
+      const secHeaders = secData[0].map(h => String(h).trim());
+      
+      // Find "Site" col in sector sheet
+      let secSiteColIdx = -1;
+      for (let j = 0; j < secHeaders.length; j++) {
+        if (secHeaders[j].toLowerCase() === 'site') {
+          secSiteColIdx = j;
+          break;
+        }
+      }
+      if (secSiteColIdx === -1) secSiteColIdx = 0;
+      
+      for (let i = 1; i < secData.length; i++) {
+        if (String(secData[i][secSiteColIdx]).trim().toUpperCase() === siteName) {
+          const sector = {};
+          secHeaders.forEach((header, j) => {
+            let value = secData[i][j];
+            if (['Long', 'Lat', 'Azimuth', 'Tilt cơ', 'Tilt điện', 'Độ cao so với chân cột', 'Độ cao so với mặt đất'].includes(header)) {
+              value = parseFloat(value) || 0;
+            } else {
+              value = value !== null && value !== undefined ? String(value).trim() : '';
+            }
+            sector[header] = value;
+          });
+          sectors.push(sector);
+        }
+      }
+    }
+  }
+  
+  return { success: true, site: siteObject, sectors: sectors };
 }
 
 // ============================================================

@@ -1,14 +1,14 @@
-const CACHE_NAME = 'rolloutops-v46';
+const CACHE_NAME = 'rolloutops-v49';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './css/style.css',
-  './js/config.js?v=45',
-  './js/storage.js?v=45',
-  './js/data.js?v=45',
-  './js/auth.js?v=45',
-  './js/map.js?v=45',
-  './js/app.js?v=45',
+  './js/config.js?v=49',
+  './js/storage.js?v=49',
+  './js/data.js?v=49',
+  './js/auth.js?v=49',
+  './js/map.js?v=49',
+  './js/app.js?v=49',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

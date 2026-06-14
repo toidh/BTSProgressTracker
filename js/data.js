@@ -289,5 +289,35 @@ const DataService = {
     } catch (error) {
       return false;
     }
-  }
+  },
+
+  // ============================================================
+  // SEARCH SITE ONLINE & DICTIONARY
+  // ============================================================
+  async searchSiteOnline(siteName) {
+    try {
+      const result = await this.apiCall({ action: 'searchSiteOnline', site: siteName });
+      return result;
+    } catch (e) {
+      console.error('Lỗi khi tìm kiếm trạm online:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  async fetchSiteDictionary() {
+    try {
+      const result = await this.apiCall({ action: 'getSiteDictionary' });
+      if (result.success && result.dictionary) {
+        return result.dictionary;
+      } else {
+        console.error('API Error in getSiteDictionary:', result.error);
+        alert('Lỗi lấy từ điển trạm từ máy chủ: ' + (result.error || result.message || 'Lỗi không xác định. Vui lòng kiểm tra lại tên Sheet "Map_data" và cột "Site".'));
+        return [];
+      }
+    } catch (e) {
+      console.error('Network Error in getSiteDictionary:', e);
+      alert('Lỗi mạng khi lấy từ điển: ' + e.message);
+      return [];
+    }
+  },
 };
