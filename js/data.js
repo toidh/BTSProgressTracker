@@ -320,4 +320,61 @@ const DataService = {
       return [];
     }
   },
+
+  // ============================================================
+  // CHECK-IN, COMMENTS, AND AI
+  // ============================================================
+  async checkinSite(data) {
+    try {
+      const result = await this.apiCall(null, 'POST', { action: 'checkinSite', ...data });
+      return result;
+    } catch (error) {
+      console.error('[DataService] checkinSite failed:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async getComments(siteName) {
+    try {
+      const result = await this.apiCall({ action: 'getComments', site: siteName });
+      return result.success ? result.comments : [];
+    } catch (error) {
+      console.error('[DataService] getComments failed:', error);
+      return [];
+    }
+  },
+
+  async addComment(data) {
+    try {
+      const result = await this.apiCall(null, 'POST', { action: 'addComment', ...data });
+      return result;
+    } catch (error) {
+      console.error('[DataService] addComment failed:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async uploadPhoto(data) {
+    try {
+      const result = await this.apiCall(null, 'POST', { action: 'uploadPhoto', ...data });
+      return result;
+    } catch (error) {
+      console.error('[DataService] uploadPhoto failed:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  async getAIKnowledge() {
+    try {
+      const cachedText = localStorage.getItem('bts_ai_knowledge_text');
+      const cachedHash = cachedText ? (localStorage.getItem('bts_ai_knowledge_hash') || '') : '';
+      const result = await this.apiCall({ action: 'getAIKnowledge', cachedHash: cachedHash });
+      return result;
+    } catch (error) {
+      console.error('[DataService] getAIKnowledge failed:', error);
+      return { success: false, error: error.message };
+    }
+  }
 };
+
+window.DataService = DataService;

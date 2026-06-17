@@ -20,6 +20,19 @@ const Auth = {
 
   logout() {
     Storage.clearSession();
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(keys => {
+        keys.forEach(key => caches.delete(key));
+      });
+    }
+    setTimeout(() => { window.location.reload(true); }, 500);
   },
 
   getCurrentUser() {

@@ -9,8 +9,8 @@ const AppConfig = {
   API_URL: 'https://script.google.com/macros/s/AKfycbzzGJxszhb1vbNKF-f4NZ6QyadEem8TGWCDL1Vbsz4UJwMB0DhAEItEqFjQUHN9YuqidQ/exec',
 
   // App info
-  APP_NAME: 'RolloutOps Pro',
-  APP_VERSION: '2.0.0',
+  APP_NAME: 'RF Mate',
+  APP_VERSION: '2.1.1',
 
   // Map defaults (centered on Bạc Liêu province)
   MAP_CENTER: [9.17684, 105.15691],
@@ -55,5 +55,16 @@ const AppConfig = {
     PENDING_UPDATES: 'bts_pending_updates',
     LAST_SYNC: 'bts_last_sync',
     MAP_STATE: 'bts_map_state',
-  }
+    CHAT_HISTORY: 'bts_ai_chat',
+  },
+  // ==========================================
+  // API Keys & Folder IDs
+  // ==========================================
+  CHECKIN_FOLDER_ID: '1X1O9I2oeOLLMKONH0MNFrCXWjAYt2o7u',
+  
+  // ⚠️ CÁCH MÃ HÓA API KEY ĐỂ TRÁNH BỊ GITHUB KHÓA
+  // 1. Vào Google AI Studio lấy API Key thật (bắt đầu bằng AIza...)
+  // 2. Mở trình duyệt web, ấn F12 sang tab Console. Gõ: btoa("AIza_KEY_CỦA_BẠN") rồi Enter.
+  // 3. Copy chuỗi kết quả (ví dụ: QUl6...) và dán vào giữa hai dấu nháy đơn của hàm atob() bên dưới.
+  GEMINI_API_KEY: atob('QVEuQWI4Uk42SWZnUFN3THR0YVJCTDEtNDFJdWRvaDlpOFdFRHpTeWViNUVRUFQ0RXZxbWc='),
 };

@@ -150,19 +150,36 @@ const App = {
       });
     }
 
-    const modalCloseBtn = document.getElementById('modal-close-btn');
-    if (modalCloseBtn) {
-      modalCloseBtn.addEventListener('click', () => this.closeSiteModal());
-    }
+    // Modals
+    document.getElementById('modal-close-btn')?.addEventListener('click', () => this.closeSiteDetail());
+    document.getElementById('navigate-btn')?.addEventListener('click', () => this.handleNavigate());
+    document.getElementById('update-form')?.addEventListener('submit', (e) => this.handleUpdateProgress(e));
 
-    // === Update Form ===
-    const updateForm = document.getElementById('update-form');
-    if (updateForm) {
-      updateForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        this.handleUpdateProgress();
-      });
-    }
+    // New Features
+    document.getElementById('checkin-btn')?.addEventListener('click', () => {
+      const cameraInput = document.getElementById('checkin-camera');
+      if (cameraInput) cameraInput.click();
+    });
+    
+    document.getElementById('checkin-camera')?.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        this.processCheckinPhoto(e.target.files[0]);
+      }
+    });
+
+    document.getElementById('compass-btn')?.addEventListener('click', () => {
+      if (window.CompassAR && this.currentSiteSectors) {
+        window.CompassAR.openCompass(this.currentSiteSectors, this.currentSite);
+      } else {
+        this.showToast('La bàn chưa sẵn sàng', 'error');
+      }
+    });
+
+    document.getElementById('comment-submit')?.addEventListener('click', () => this.submitComment());
+
+    document.getElementById('ai-assistant-btn')?.addEventListener('click', () => {
+      if (window.AIAssistant) window.AIAssistant.openChat();
+    });
 
     // === Settings ===
     const settingsBtn = document.getElementById('settings-btn');
@@ -282,7 +299,7 @@ const App = {
     // Load data
     this.showLoading('Đang tải dữ liệu...');
     try {
-      if (Auth.getRole() !== 'view_limited') {
+      if (!['view_limited', 'doitac'].includes(Auth.getRole())) {
         this.sites = await DataService.fetchSites();
         MapManager.loadSites(this.sites);
         this.updateStats();
@@ -305,7 +322,7 @@ const App = {
         if (syncResult.synced > 0) {
           this.showToast(`Đã đồng bộ ${syncResult.synced} cập nhật offline`, 'success');
           this.sites = await DataService.fetchSites();
-          if (Auth.getRole() !== 'view_limited') {
+          if (!['view_limited', 'doitac'].includes(Auth.getRole())) {
             MapManager.loadSites(this.sites);
           }
         }
@@ -364,7 +381,7 @@ const App = {
     const q = query.toLowerCase();
     
     // View Limited Role uses Site Dictionary for fast autocomplete
-    if (Auth.getRole() === 'view_limited') {
+    if (['view_limited', 'doitac'].includes(Auth.getRole())) {
       const dict = this.siteDictionary || [];
       const matches = dict.filter(name => name.toLowerCase().includes(q)).slice(0, 10);
       
@@ -425,7 +442,7 @@ const App = {
     document.getElementById('search-results').classList.remove('visible');
 
     // view_limited: fetch full data online and load it
-    if (Auth.getRole() === 'view_limited') {
+    if (['view_limited', 'doitac'].includes(Auth.getRole())) {
       this.searchOnline(siteName);
     } else {
       MapManager.flyToSite(siteName);
@@ -518,7 +535,7 @@ const App = {
     };
     document.getElementById('update-4g').value = getProgVal(p4g);
     document.getElementById('update-5g').value = getProgVal(p5g);
-    document.getElementById('update-note').value = site['Ghi chú (TKTU ONSITE)'] || '';
+    document.getElementById('update-note').value = '';
 
     // Toggle 4G/5G field visibility based on classification
     const classification = String(site['Phân loại'] || '').trim();
@@ -535,32 +552,55 @@ const App = {
       field5G.style.display = '';
     }
 
+    // 5. Setup Action Buttons
+    const lat = site['Lat'];
+    const lng = site['Long'];
+    const siteName = site['Site'];
+    const navigateBtn = document.getElementById('navigate-btn');
+    if (navigateBtn) {
+      navigateBtn.onclick = () => MapManager.navigateToSite(lat, lng);
+    }
+    
+    // Check-in and Compass buttons
+    const checkinBtn = document.getElementById('checkin-btn');
+    const role = Auth.getRole();
+
+    const noteVal = String(site['Ghi chú (TKTU ONSITE)'] || '').trim();
+    const historyEl = document.getElementById('update-note-history');
+    if (historyEl) {
+      historyEl.textContent = noteVal;
+      historyEl.style.display = noteVal ? 'block' : 'none';
+      setTimeout(() => historyEl.scrollTop = historyEl.scrollHeight, 10);
+    }
+    if (['admin', 'manager', 'doitac', 'export'].includes(role)) {
+      if (checkinBtn) checkinBtn.style.display = 'flex';
+    } else {
+      if (checkinBtn) checkinBtn.style.display = 'none';
+    }
+
+    // Save site to context for checkin/compass
+    this.currentSite = site;
+    this.currentSiteSectors = MapManager.sectorData.filter(s => 
+      String(s['Site'] || '').trim().toUpperCase() === String(site['Site'] || '').trim().toUpperCase()
+    );
+
+    // 6. Async Data Loads
+    this.loadWeatherForecast(lat, lng);
+      this.loadDiagrams(siteName);
+      this.loadCheckinImage(site);
+    this.loadSiteConfig(siteName);
+    this.loadComments(siteName);
+
     // Store current site for update
     document.getElementById('update-form').dataset.siteName = site['Site'];
     document.getElementById('update-form').dataset.siteLat = site['Lat'];
     document.getElementById('update-form').dataset.siteLng = site['Long'];
 
-    // Navigate button
-    const navBtn = document.getElementById('navigate-btn');
-    navBtn.onclick = () => {
-      MapManager.navigateToSite(site['Lat'], site['Long']);
-    };
-
     // Call buttons
     this.setupCallButtons(site);
 
     // Show modal
-    modal.classList.add('visible');
-    document.body.classList.add('modal-open');
-
-    // Load weather forecast
-    this.loadWeatherForecast(site['Lat'], site['Long']);
-
-    // Load diagrams
-    this.loadDiagrams(site['Site']);
-
-    // Load config file link
-    this.loadSiteConfig(site['Site']);
+    this.showOverlay('site-modal-overlay');
   },
 
   setupCallButtons(site) {
@@ -590,11 +630,209 @@ const App = {
     document.body.classList.remove('modal-open');
   },
 
+  closeSiteDetail() {
+    this.closeSiteModal();
+  },
+
+  // ============================================================
+  // CHECK-IN & COMMENTS
+  // ============================================================
+  async processCheckinPhoto(file) {
+    if (!this.currentSite) return;
+    this.showLoading('Đang lấy tọa độ và xử lý ảnh...');
+    
+    try {
+      // 1. Get GPS
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
+      });
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      
+      // 2. Draw watermark and compress
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await new Promise(r => img.onload = r);
+      
+      let width = img.width;
+      let height = img.height;
+      const MAX_SIZE = 1280;
+      
+      if (width > height && width > MAX_SIZE) {
+        height = Math.round(height * MAX_SIZE / width);
+        width = MAX_SIZE;
+      } else if (height >= width && height > MAX_SIZE) {
+        width = Math.round(width * MAX_SIZE / height);
+        height = MAX_SIZE;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      const fontSize = Math.max(16, Math.floor(canvas.width / 30));
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(10, canvas.height - (fontSize * 4.5), canvas.width - 20, fontSize * 4);
+      
+      ctx.fillStyle = '#FFD700';
+      const timeStr = new Date().toLocaleString('vi-VN');
+      const userStr = Auth.getDisplayName();
+      const siteStr = this.currentSite['Site'];
+      
+      ctx.fillText(`📍 Trạm: ${siteStr} | GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 20, canvas.height - (fontSize * 3));
+      ctx.fillText(`🕐 ${timeStr}`, 20, canvas.height - (fontSize * 1.8));
+      ctx.fillText(`👤 User: ${userStr}`, 20, canvas.height - (fontSize * 0.6));
+      
+      // Compress
+      const base64 = canvas.toDataURL('image/jpeg', 0.7);
+      
+      this.showLoading('Đang tải ảnh lên và check-in...');
+      const result = await DataService.checkinSite({
+        site: siteStr,
+        lat: lat,
+        lng: lng,
+        imageBase64: base64,
+        username: Auth.getUsername(),
+        timestamp: Date.now()
+      });
+      
+      this.hideLoading();
+      if (result.success) {
+        // Log checkin for partner dashboard tracking
+        if (!window._checkinLog) window._checkinLog = [];
+        window._checkinLog.push({
+          site: siteStr,
+          user: Auth.getUsername(),
+          partner: this.currentSite['Đối tác'] || '',
+          team: this.currentSite['Đội thực hiện'] || '',
+          sdt: this.currentSite['SĐT'] || '',
+          timestamp: Date.now()
+        });
+        
+        const siteIndex = this.sites.findIndex(s => String(s['Site']).trim().toUpperCase() === String(siteStr).trim().toUpperCase());
+        if (siteIndex >= 0) {
+          if (result.updatedProgress) {
+            if (result.updatedProgress.p4) this.sites[siteIndex]['Tiến độ 4G'] = result.updatedProgress.p4;
+            if (result.updatedProgress.p5) this.sites[siteIndex]['Tiến độ 5G'] = result.updatedProgress.p5;
+            
+            // Recalculate status locally
+            const classification = String(this.sites[siteIndex]['Phân loại'] || '').trim();
+            let p4g = String(this.sites[siteIndex]['Tiến độ 4G'] || '').trim();
+            let p5g = String(this.sites[siteIndex]['Tiến độ 5G'] || '').trim();
+            let trangThai = 'Chưa thực hiện';
+            if (classification === '5G_4G Z') {
+              if (p4g === 'Hoàn thành' && p5g === 'Hoàn thành') trangThai = 'Hoàn thành';
+              else if (p4g === 'Đang thực hiện' || p5g === 'Đang thực hiện' || p4g === 'Hoàn thành' || p5g === 'Hoàn thành') trangThai = 'Đang thực hiện';
+            } else if (classification === '5G Z') {
+              if (p5g === 'Hoàn thành') trangThai = 'Hoàn thành';
+              else if (p5g === 'Đang thực hiện') trangThai = 'Đang thực hiện';
+            } else if (classification === '4G Z') {
+              if (p4g === 'Hoàn thành') trangThai = 'Hoàn thành';
+              else if (p4g === 'Đang thực hiện') trangThai = 'Đang thực hiện';
+            }
+            this.sites[siteIndex]['Status'] = trangThai;
+            
+            const nowStr = new Date().toLocaleString('vi-VN');
+            this.sites[siteIndex]['Ngày cập nhật'] = nowStr;
+            Storage.setSitesData(this.sites);
+            
+            if (this.currentDetailSite && this.currentDetailSite['Site'] === siteStr) {
+              this.currentDetailSite['Tiến độ 4G'] = result.updatedProgress.p4 || this.currentDetailSite['Tiến độ 4G'];
+              this.currentDetailSite['Tiến độ 5G'] = result.updatedProgress.p5 || this.currentDetailSite['Tiến độ 5G'];
+              this.currentDetailSite['Status'] = trangThai;
+              this.currentDetailSite['Ngày cập nhật'] = nowStr;
+              this.showSiteDetail(this.currentDetailSite);
+            }
+          }
+          if (result.imageUrl) {
+            let linkKey = Object.keys(this.sites[siteIndex]).find(k => {
+              let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
+              return n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh';
+            });
+            if (!linkKey) linkKey = 'Link Ảnh Check-in';
+            this.sites[siteIndex][linkKey] = result.imageUrl;
+            
+            if (this.currentDetailSite && this.currentDetailSite['Site'] === siteStr) {
+              this.currentDetailSite[linkKey] = result.imageUrl;
+              this.loadCheckinImage(this.currentDetailSite);
+            }
+          }
+          
+          if (result.updatedProgress || result.imageUrl) {
+            MapManager.loadSites(this.sites);
+            this.updateStats();
+            this.renderDashboard();
+          }
+        }
+        this.showToast(result.message, 'success');
+      } else {
+        this.showToast('Lỗi Check-in: ' + result.error, 'error');
+      }
+    } catch (e) {
+      this.hideLoading();
+      if (e.code === 1) this.showToast('Vui lòng cấp quyền vị trí GPS', 'error');
+      else this.showToast('Lỗi xử lý ảnh: ' + e.message, 'error');
+    }
+  },
+
+  async loadComments(siteName) {
+    const list = document.getElementById('comments-list');
+    if (!list) return;
+    list.innerHTML = '<div class="loading-spinner"></div>';
+    
+    const comments = await DataService.getComments(siteName);
+    list.innerHTML = '';
+    
+    if (comments.length === 0) {
+      list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Chưa có bình luận nào</div>';
+      return;
+    }
+    
+    comments.forEach(c => {
+      list.innerHTML += `
+        <div class="comment-bubble">
+          <div class="comment-header">
+            <span class="comment-user">${c.user}</span>
+            <span>${c.timestamp}</span>
+          </div>
+          <div class="comment-msg">${c.message}</div>
+        </div>
+      `;
+    });
+    list.scrollTop = list.scrollHeight;
+  },
+
+  async submitComment() {
+    const input = document.getElementById('comment-input');
+    const msg = input.value.trim();
+    if (!msg || !this.currentSite) return;
+    
+    input.value = '';
+    this.showToast('Đang gửi bình luận...', 'info');
+    
+    const result = await DataService.addComment({
+      site: this.currentSite['Site'],
+      message: msg,
+      username: Auth.getUsername(),
+      role: Auth.getRole()
+    });
+    
+    if (result.success) {
+      this.loadComments(this.currentSite['Site']);
+    } else {
+      this.showToast('Lỗi gửi bình luận: ' + result.error, 'error');
+    }
+  },
+
   // ============================================================
   // Update Progress Handler
   // ============================================================
-  async handleUpdateProgress() {
-    if (Auth.getRole() !== 'admin') return App.showToast('Tài khoản của bạn không có quyền cập nhật tiến độ', 'error');
+  async handleUpdateProgress(e) {
+    if (e) e.preventDefault();
+    if (!['admin', 'manager'].includes(Auth.getRole())) return App.showToast('Tài khoản của bạn không có quyền cập nhật tiến độ', 'error');
     const form = document.getElementById('update-form');
     const siteName = form.dataset.siteName;
     const progress4G = document.getElementById('update-4g').value;
@@ -620,7 +858,31 @@ const App = {
         if (siteIndex >= 0) {
           this.sites[siteIndex]['Tiến độ 4G'] = progress4G;
           this.sites[siteIndex]['Tiến độ 5G'] = progress5G;
-          this.sites[siteIndex]['Ghi chú (TKTU ONSITE)'] = note;
+          if (result.updatedNote !== undefined) {
+            this.sites[siteIndex]['Ghi chú (TKTU ONSITE)'] = result.updatedNote;
+            if (this.currentDetailSite && this.currentDetailSite['Site'] === siteName) {
+              this.currentDetailSite['Ghi chú (TKTU ONSITE)'] = result.updatedNote;
+            }
+          } else {
+            // fallback for offline
+            const oldNote = String(this.sites[siteIndex]['Ghi chú (TKTU ONSITE)'] || '').trim();
+            if (note.trim() !== '') {
+              const tz = 'Asia/Ho_Chi_Minh';
+              const now = new Date();
+              const nowStr = `[${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}]`;
+              const newNoteText = `${nowStr} ${Auth.getUsername()}: ${note.trim()}`;
+              const appended = oldNote ? (oldNote + '\n' + newNoteText) : newNoteText;
+              this.sites[siteIndex]['Ghi chú (TKTU ONSITE)'] = appended;
+            }
+          }
+          
+          document.getElementById('update-note').value = '';
+          const historyEl = document.getElementById('update-note-history');
+          if (historyEl && this.sites[siteIndex]['Ghi chú (TKTU ONSITE)']) {
+            historyEl.textContent = this.sites[siteIndex]['Ghi chú (TKTU ONSITE)'];
+            historyEl.style.display = 'block';
+            setTimeout(() => historyEl.scrollTop = historyEl.scrollHeight, 10);
+          }
           this.sites[siteIndex]['User cập nhật'] = Auth.getUsername();
           const now = new Date();
           this.sites[siteIndex]['Ngày cập nhật'] = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
@@ -713,7 +975,7 @@ const App = {
 
       this.sites = await DataService.fetchSites();
       
-      if (Auth.getRole() !== 'view_limited') {
+      if (!['view_limited', 'doitac'].includes(Auth.getRole())) {
         MapManager.loadSites(this.sites);
         this.updateStats();
         // Reload sectors
@@ -750,7 +1012,7 @@ const App = {
       if (this.isOnline) {
         try {
           this.sites = await DataService.fetchSites();
-          if (Auth.getRole() !== 'view_limited') {
+          if (!['view_limited', 'doitac'].includes(Auth.getRole())) {
             MapManager.loadSites(this.sites);
             this.updateStats();
             this.renderDashboard();
@@ -776,7 +1038,7 @@ const App = {
         if (result.synced > 0) {
           this.showToast(`Đã đồng bộ ${result.synced} cập nhật offline`, 'success');
           this.sites = await DataService.fetchSites();
-          if (Auth.getRole() !== 'view_limited') {
+          if (!['view_limited', 'doitac'].includes(Auth.getRole())) {
             MapManager.loadSites(this.sites);
             this.updateStats();
             this.renderDashboard();
@@ -832,6 +1094,11 @@ const App = {
     document.getElementById('loading-overlay').classList.remove('visible');
   },
 
+  showOverlay(id) {
+    document.getElementById(id).classList.add('visible');
+    document.body.classList.add('modal-open');
+  },
+
   showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -858,7 +1125,7 @@ const App = {
   // DASHBOARD
   // ============================================================
   openDashboard() {
-    if (Auth.getRole() === 'view_limited') return this.showToast('Tài khoản của bạn không có quyền xem Dashboard', 'error');
+    if (['view_limited', 'doitac'].includes(Auth.getRole())) return this.showToast('Tài khoản của bạn không có quyền xem Dashboard', 'error');
     this.renderDashboard();
     document.getElementById('dashboard-overlay').classList.add('visible');
   },
@@ -885,19 +1152,26 @@ const App = {
 
     // === Progress Bar ===
     document.getElementById('dash-progress-fill').style.width = pct + '%';
+    const exportPdfBtn = document.getElementById('dashboard-export-btn');
+    if (exportPdfBtn) {
+      exportPdfBtn.style.display = Auth.getRole() === 'admin' ? 'inline-block' : 'none';
+    }
     document.getElementById('dash-progress-pct').textContent = pct + '%';
 
     // === Daily Plan Report ===
     this.renderDailyPlan(sites);
 
+    // === Partner Daily Plan Report ===
+    this.renderPartnerDailyPlan(sites);
+
     // === Cumulative Report ===
     this.renderCumulativeReport(sites);
 
     // === Plan by Huyện ===
-    this.renderPlanByGroup(sites, 'Huyện', 'dash-plan-huyen');
+    // this.renderPlanByGroup(sites, "Huyện", "dash-plan-huyen");
 
     // === Plan by Đối tác ===
-    this.renderPlanByGroup(sites, 'Đối tác', 'dash-plan-doitac');
+    this.renderPlanByGroup(sites, "Đối tác", "dash-plan-doitac");
 
     // === Recent Updates ===
     this.renderRecentUpdates(sites);
@@ -1047,6 +1321,151 @@ const App = {
     `;
   },
 
+  renderPartnerDailyPlan(sites) {
+    const el = document.getElementById('dash-plan-partner');
+    if (!el) return;
+
+    const role = Auth.getRole();
+    const canSeeDetail = (role === 'admin' || role === 'partner_view_limited');
+
+    // Filter today's plan
+    const today = new Date();
+    const todayDay = today.getDate(), todayMonth = today.getMonth(), todayYear = today.getFullYear();
+    const isToday = (val) => {
+      const s = String(val || '');
+      const m1 = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (m1) {
+        const d = parseInt(m1[1]), mo = parseInt(m1[2]) - 1, y = parseInt(m1[3]);
+        return d === todayDay && mo === todayMonth && y === todayYear;
+      }
+      return false;
+    };
+
+    const planSites = sites.filter(s => isToday(s['Kế hoạch ngày']));
+    if (planSites.length === 0) {
+      el.innerHTML = '<div class="dash-empty">Không có dữ liệu kế hoạch ngày hôm nay</div>';
+      return;
+    }
+
+    // Group by partner
+    const partnerMap = {};
+    planSites.forEach(s => {
+      const partner = String(s['Đối tác'] || 'Chưa phân').trim();
+      if (!partnerMap[partner]) {
+        partnerMap[partner] = {
+          sites: [],
+          teams: new Set()
+        };
+      }
+      partnerMap[partner].sites.push(s);
+      // Count unique teams by Đội thực hiện + SĐT combination
+      const teamKey = (String(s['Đội thực hiện'] || '') + '|' + String(s['SĐT'] || '')).trim();
+      if (teamKey !== '|') partnerMap[partner].teams.add(teamKey);
+    });
+
+    // Checkin log
+    const checkinLog = window._checkinLog || [];
+
+    const unsortedRows = Object.entries(partnerMap).map(([partner, info]) => {
+      const partnerSites = info.sites;
+      const total = partnerSites.length;
+      const done = partnerSites.filter(s => DataService.getSiteStatus(s) === 'completed').length;
+      const inProg = partnerSites.filter(s => DataService.getSiteStatus(s) === 'in_progress').length;
+      const notDone = total - done - inProg;
+      const pct = total > 0 ? (done / total) * 100 : 0;
+      const numTeams = info.teams.size || 1;
+      
+      let checkinCount = 0;
+      partnerSites.forEach(s => {
+        let hasCheckin = false;
+        // Check if any sheet column resembling 'checkin' has value
+        for (const k in s) {
+          if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && s[k] && String(s[k]).trim() !== '') {
+            hasCheckin = true;
+            break;
+          }
+        }
+        // Fallback to local session checkinLog for immediate feedback
+        if (!hasCheckin) {
+          hasCheckin = checkinLog.some(c => c.site === s['Site']);
+        }
+        if (hasCheckin) checkinCount++;
+      });
+
+      return {
+        partner, total, done, inProg, notDone, pct, numTeams, checkinCount
+      };
+    });
+
+    // Sort by percentage descending
+    unsortedRows.sort((a, b) => b.pct - a.pct);
+
+    let sumTotal = 0, sumDone = 0, sumInProg = 0, sumNotDone = 0, sumTeams = 0, sumCheckins = 0;
+
+    const detailOrHide = (count, filterKey, partnerName, label, color) => {
+      const colorStyle = color ? ` style="color:var(--${color})"` : '';
+      if (!canSeeDetail) return `<td class="num"${colorStyle}>${count}</td>`;
+      return `<td class="num clickable-number"${colorStyle} onclick="App.showSiteList('partner_${partnerName}_${filterKey}','${label} (${partnerName})')">${count}</td>`;
+    };
+
+    const rows = unsortedRows.map(r => {
+      sumTotal += r.total;
+      sumDone += r.done;
+      sumInProg += r.inProg;
+      sumNotDone += r.notDone;
+      sumTeams += r.numTeams;
+      sumCheckins += r.checkinCount;
+
+      const pctStr = r.pct.toFixed(1);
+
+      return `<tr>
+        <td style="font-weight:600">${r.partner}</td>
+        <td class="num" style="color:var(--color-blue)">${r.numTeams}</td>
+        ${detailOrHide(r.checkinCount, 'checkin', r.partner, 'Đã Check-in', 'color-amber')}
+        ${detailOrHide(r.total, 'all', r.partner, 'Kế hoạch ngày', 'color-blue')}
+        ${detailOrHide(r.done, 'completed', r.partner, 'Hoàn thành', 'color-green')}
+        ${detailOrHide(r.inProg, 'in_progress', r.partner, 'Đang TH', 'color-red')}
+        ${detailOrHide(r.notDone, 'pending', r.partner, 'Chưa TH', 'text-muted')}
+        <td class="pct">${pctStr}%<div class="mini-bar"><div class="mini-bar-fill" style="width:${pctStr}%"></div></div></td>
+      </tr>`;
+    });
+
+    const totalPct = sumTotal > 0 ? ((sumDone / sumTotal) * 100).toFixed(1) : '0.0';
+    const totalRow = `
+      <tr style="font-weight:700;background:rgba(255,255,255,0.03);border-top:2px solid var(--border-glass)">
+        <td>TỔNG CỘNG</td>
+        <td class="num" style="color:var(--color-blue)">${sumTeams}</td>
+        <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--color-amber)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_checkin', 'Đã Check-in (Tổng)')"` : ''}>${sumCheckins}</td>
+        <td class="num ${canSeeDetail ? 'clickable-number' : ''}" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_all', 'Kế hoạch ngày (Tổng)')"` : ''}>${sumTotal}</td>
+        <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--color-green)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_completed', 'Hoàn thành (Tổng)')"` : ''}>${sumDone}</td>
+        <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--color-red)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_in_progress', 'Đang thực hiện (Tổng)')"` : ''}>${sumInProg}</td>
+        <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--text-muted)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_pending', 'Chưa thực hiện (Tổng)')"` : ''}>${sumNotDone}</td>
+        <td class="pct" style="color:var(--color-blue)">${totalPct}%</td>
+      </tr>
+    `;
+
+    el.innerHTML = `
+      <div class="table-responsive">
+      <table class="dash-table">
+        <thead><tr>
+          <th>Đối tác</th>
+          <th class="num">Số đội</th>
+          <th class="num">Check-in</th>
+          <th class="num">KH ngày</th>
+          <th class="num">Hoàn thành</th>
+          <th class="num">Đang TH</th>
+          <th class="num">Chưa TH</th>
+          <th class="pct">Tỷ lệ</th>
+        </tr></thead>
+        <tbody>
+          ${rows.join('')}
+          ${totalRow}
+        </tbody>
+      </table>
+      </div>
+    `;
+  },
+
   renderCumulativeReport(sites) {
     const total = sites.length;
     const completed = sites.filter(s => DataService.getSiteStatus(s) === 'completed').length;
@@ -1084,7 +1503,7 @@ const App = {
     document.getElementById('dash-cumulative-content').innerHTML = `
       <div class="table-responsive">
       <table class="dash-table">
-        <thead><tr><th>Loại</th><th class="num">Tổng</th><th class="num">4G</th><th class="num">5G</th><th class="num">Hoàn thành</th><th class="num">Đang TH</th><th class="num">Chưa TH</th><th class="pct">Tỷ lệ</th></tr></thead>
+        <thead><tr><th style="width:20%">Loại</th><th class="num" style="width:10%">Tổng</th><th class="num" style="width:10%">4G</th><th class="num" style="width:10%">5G</th><th class="num" style="width:14%">Hoàn thành</th><th class="num" style="width:12%">Đang TH</th><th class="num" style="width:12%">Chưa TH</th><th class="pct" style="width:12%">Tỷ lệ</th></tr></thead>
         <tbody>
           <tr>
             <td><span class="status-dot" style="background:var(--color-blue)"></span>5G_4G Z</td>
@@ -1138,11 +1557,14 @@ const App = {
     const groups = {};
     sites.forEach(s => {
       const key = String(s[groupKey] || 'Khác').trim();
-      if (!groups[key]) groups[key] = { total: 0, completed: 0, inProgress: 0 };
+      if (!groups[key]) groups[key] = { total: 0, completed: 0, inProgress: 0, c4g: 0, c5g: 0 };
       groups[key].total++;
       const status = DataService.getSiteStatus(s);
       if (status === 'completed') groups[key].completed++;
       else if (status === 'in_progress') groups[key].inProgress++;
+
+      if (String(s['Tiến độ 4G'] || '').trim() === 'Hoàn thành') groups[key].c4g++;
+      if (String(s['Tiến độ 5G'] || '').trim() === 'Hoàn thành') groups[key].c5g++;
     });
 
     const sorted = Object.entries(groups).sort((a, b) => {
@@ -1155,7 +1577,7 @@ const App = {
     el.innerHTML = `
       <div class="table-responsive">
       <table class="dash-table">
-        <thead><tr><th>${groupKey}</th><th class="num">Tổng</th><th class="num">Hoàn thành</th><th class="num">Đang TH</th><th class="num">Chưa TH</th><th class="pct">Tỷ lệ</th></tr></thead>
+        <thead><tr><th style="width:20%">${groupKey}</th><th class="num" style="width:10%">Tổng</th><th class="num" style="width:10%">4G</th><th class="num" style="width:10%">5G</th><th class="num" style="width:14%">Hoàn thành</th><th class="num" style="width:12%">Đang TH</th><th class="num" style="width:12%">Chưa TH</th><th class="pct" style="width:12%">Tỷ lệ</th></tr></thead>
         <tbody>
           ${sorted.map(([name, data]) => {
             const pct = data.total > 0 ? ((data.completed / data.total) * 100).toFixed(2) : '0.00';
@@ -1163,6 +1585,8 @@ const App = {
             return `<tr>
               <td>${name}</td>
               <td class="num" style="color:var(--color-blue)" class="clickable-number" onclick="App.showSiteList('group_${groupKey}_${name}_all', 'Tất cả (${name})')">${data.total}</td>
+              <td class="num" style="color:var(--color-blue)">${data.c4g > 0 ? data.c4g : ''}</td>
+              <td class="num" style="color:var(--color-purple)">${data.c5g > 0 ? data.c5g : ''}</td>
               <td class="num" style="color:var(--color-green)" class="clickable-number" onclick="App.showSiteList('group_${groupKey}_${name}_completed', 'Hoàn thành (${name})')">${data.completed}</td>
               <td class="num" style="color:var(--color-red)" class="clickable-number" onclick="App.showSiteList('group_${groupKey}_${name}_in_progress', 'Đang thực hiện (${name})')">${data.inProgress}</td>
               <td class="num" style="color:var(--text-muted)" class="clickable-number" onclick="App.showSiteList('group_${groupKey}_${name}_pending', 'Chưa thực hiện (${name})')">${remaining}</td>
@@ -1196,7 +1620,7 @@ const App = {
     const updated = sites
       .filter(s => s['Ngày cập nhật'] && String(s['Ngày cập nhật']).trim())
       .sort((a, b) => parseDate(b['Ngày cập nhật']) - parseDate(a['Ngày cập nhật']))
-      .slice(0, 15);
+      .slice(0, 10);
 
     const el = document.getElementById('dash-recent-updates');
     if (updated.length === 0) {
@@ -1250,6 +1674,151 @@ const App = {
   // ============================================================
   renderCharts(sites) {
     if (!window.Chart) return;
+
+    const ctxHuyen = document.getElementById('chart-huyen');
+    if (ctxHuyen) {
+      const groups = {};
+      sites.forEach(s => {
+        const key = String(s['Huyện'] || 'Khác').trim();
+        if (!groups[key]) groups[key] = { total: 0, comp: 0, ip: 0, p: 0 };
+        groups[key].total++;
+        const status = DataService.getSiteStatus(s);
+        if (status === 'completed') groups[key].comp++;
+        else if (status === 'in_progress') groups[key].ip++;
+        else groups[key].p++;
+      });
+      const huyenKeys = Object.keys(groups).sort((a,b) => groups[b].total - groups[a].total);
+      
+      window._huyenData = groups;
+      
+      const customHuyenPlugin = {
+        id: 'customHuyenLabels',
+        afterDatasetsDraw(chart, args, options) {
+          const { ctx } = chart;
+          ctx.save();
+          ctx.font = '11px Arial';
+          ctx.fillStyle = document.documentElement.getAttribute('data-pdf-export') ? '#000000' : '#cbd5e1';
+          ctx.textBaseline = 'middle';
+          
+          const metaIp = chart.getDatasetMeta(0);
+          const metaComp = chart.getDatasetMeta(1);
+          const metaPend = chart.getDatasetMeta(2);
+          
+                    chart.data.labels.forEach((label, index) => {
+            const data = groups[label];
+            if (!data || data.total === 0) return;
+            
+            const metaIp = chart.getDatasetMeta(0);
+            const metaComp = chart.getDatasetMeta(1);
+            const metaPend = chart.getDatasetMeta(2);
+            
+            const widthRed = metaIp.data[index] ? metaIp.data[index].x - metaIp.data[index].base : 0;
+            const widthGreen = metaComp.data[index] ? metaComp.data[index].x - metaComp.data[index].base : 0;
+            
+            const hasRed = data.ip > 0;
+            const hasGreen = data.comp > 0;
+            const yPos = metaIp.data[index] ? metaIp.data[index].y : (metaComp.data[index] ? metaComp.data[index].y : 0);
+            
+            let drawRed = false;
+            let redX = 0;
+            let redAlign = 'right';
+            const redPct = (data.ip / data.total * 100).toFixed(2) + '%';
+            
+            if (hasRed) {
+              if (hasGreen) {
+                redX = metaComp.data[index].base + 5;
+                redAlign = 'left';
+                if (widthGreen > 75) drawRed = true;
+              } else {
+                if (widthRed > 30) {
+                  redX = metaIp.data[index].x - 5;
+                  redAlign = 'right';
+                  drawRed = true;
+                }
+              }
+            }
+            
+            let drawGreen = false;
+            let greenX = 0;
+            let greenAlign = 'right';
+            const greenPct = (data.comp / data.total * 100).toFixed(2) + '%';
+            
+            if (hasGreen && widthGreen > 30) {
+              greenX = metaComp.data[index].x - 5;
+              greenAlign = 'right';
+              drawGreen = true;
+            }
+            
+            if (drawRed) {
+              ctx.textAlign = redAlign;
+              ctx.fillText(redPct, redX, yPos);
+            }
+            if (drawGreen) {
+              ctx.textAlign = greenAlign;
+              ctx.fillText(greenPct, greenX, yPos);
+            }
+            
+            let maxX = Math.max(
+              metaIp.data[index] ? metaIp.data[index].x : 0,
+              metaComp.data[index] ? metaComp.data[index].x : 0,
+              metaPend.data[index] ? metaPend.data[index].x : 0
+            );
+            if (maxX > 0) {
+              const isMobile = window.innerWidth < 768;
+              const suffix = isMobile ? '' : ' trạm';
+              ctx.textAlign = 'left';
+              ctx.fillText(` ${data.total}${suffix}`, maxX + 5, yPos);
+            }
+          });
+          ctx.restore();
+        }
+      };
+
+      if (window.chartHuyenInstance) window.chartHuyenInstance.destroy();
+      window.chartHuyenInstance = new Chart(ctxHuyen, {
+        type: 'bar',
+        data: {
+          labels: huyenKeys,
+          datasets: [
+            { label: 'Đang thực hiện', data: huyenKeys.map(k=>groups[k].ip), backgroundColor: '#ef4444', maxBarThickness: 24, maxBarThickness: 24 },
+            { label: 'Hoàn thành', data: huyenKeys.map(k=>groups[k].comp), backgroundColor: '#10b981', maxBarThickness: 24, maxBarThickness: 24 },
+            { label: 'Chưa thực hiện', data: huyenKeys.map(k=>groups[k].p), backgroundColor: '#475569', maxBarThickness: 24, maxBarThickness: 24 }
+          ]
+        },
+        plugins: [customHuyenPlugin],
+        options: {
+          indexAxis: 'y',
+          responsive: true, maintainAspectRatio: false,
+          layout: { padding: { right: window.innerWidth < 768 ? 25 : 100 } },
+          scales: { 
+            x: { stacked: true, ticks:{color:'#cbd5e1'}, display: false }, 
+            y: { stacked: true, ticks:{color:'#cbd5e1'} } 
+          },
+          plugins: { 
+            legend: { position: 'bottom', labels:{color:'#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 }} },
+            title: { display: true, text: 'Tiến độ theo Huyện', color: '#f8fafc' },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const pName = context.label;
+                  const data = window._huyenData ? window._huyenData[pName] : null;
+                  if (data) {
+                    const pct = data.total > 0 ? ((data.comp / data.total) * 100).toFixed(2) : 0;
+                    return [
+                      context.dataset.label + ': ' + context.parsed.x,
+                      `Tiến độ: ${pct}%`,
+                      `Hoàn thành: ${data.comp} / ${data.total} trạm`
+                    ];
+                  }
+                  return context.dataset.label + ': ' + context.parsed.x;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
     
     // 1. Overall Completion Pie Chart
     const total = sites.length;
@@ -1285,32 +1854,108 @@ const App = {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'bottom', labels: { color: '#cbd5e1' } },
+            legend: { position: 'bottom', labels: { color: '#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 } } },
             title: { display: true, text: 'Tổng quan tiến độ', color: '#f8fafc' }
           }
         }
       });
     }
 
-    // 2. Categories Bar Chart
-    const cats = {};
+    // 2. Categories Bar Chart (Horizontal)
+    const categories = {};
     sites.forEach(s => {
       const c = String(s['Phân loại'] || 'Khác').trim();
-      if (!cats[c]) cats[c] = { comp: 0, ip: 0, p: 0 };
+      if (!categories[c]) categories[c] = { total: 0, comp: 0, ip: 0, p: 0 };
+      categories[c].total++;
       const status = DataService.getSiteStatus(s);
-      if (status === 'completed') cats[c].comp++;
-      else if (status === 'in_progress') cats[c].ip++;
-      else cats[c].p++;
+      if (status === 'completed') categories[c].comp++;
+      else if (status === 'in_progress') categories[c].ip++;
+      else categories[c].p++;
     });
 
-    const catLabels = Object.keys(cats).sort((a, b) => {
-      const tA = cats[a].comp + cats[a].ip + cats[a].p;
-      const tB = cats[b].comp + cats[b].ip + cats[b].p;
-      return tA - tB;
-    });
-    const catComp = catLabels.map(c => cats[c].comp);
-    const catIp = catLabels.map(c => cats[c].ip);
-    const catP = catLabels.map(c => cats[c].p);
+    const cLabels = Object.keys(categories).sort((a,b) => categories[b].total - categories[a].total);
+    const cComp = cLabels.map(k => categories[k].comp);
+    const cIp = cLabels.map(k => categories[k].ip);
+    const cPend = cLabels.map(k => categories[k].p);
+
+    window._catData = categories;
+
+    const customCatPlugin = {
+      id: 'customCatLabels',
+      afterDatasetsDraw(chart, args, options) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.font = '11px Arial';
+        ctx.fillStyle = document.documentElement.getAttribute('data-pdf-export') ? '#000000' : '#cbd5e1';
+        ctx.textBaseline = 'middle';
+        
+        const metaIp = chart.getDatasetMeta(0);
+        const metaComp = chart.getDatasetMeta(1);
+        const metaPend = chart.getDatasetMeta(2);
+        
+        chart.data.labels.forEach((label, index) => {
+          const data = categories[label];
+          if (!data || data.total === 0) return;
+          
+          const widthRed = metaIp.data[index] ? metaIp.data[index].x - metaIp.data[index].base : 0;
+          const widthGreen = metaComp.data[index] ? metaComp.data[index].x - metaComp.data[index].base : 0;
+          
+          const hasRed = data.ip > 0;
+          const hasGreen = data.comp > 0;
+          const yPos = metaIp.data[index] ? metaIp.data[index].y : (metaComp.data[index] ? metaComp.data[index].y : 0);
+          
+          let drawRed = false;
+          let redX = 0;
+          let redAlign = 'right';
+          const redPct = (data.ip / data.total * 100).toFixed(2) + '%';
+          
+          if (hasRed) {
+            if (hasGreen) {
+              redX = metaComp.data[index].base + 5;
+              redAlign = 'left';
+              if (widthGreen > 75) drawRed = true;
+            } else {
+              if (widthRed > 30) {
+                redX = metaIp.data[index].x - 5;
+                redAlign = 'right';
+                drawRed = true;
+              }
+            }
+          }
+          
+          let drawGreen = false;
+          let greenX = 0;
+          let greenAlign = 'right';
+          const greenPct = (data.comp / data.total * 100).toFixed(2) + '%';
+          
+          if (hasGreen && widthGreen > 30) {
+            greenX = metaComp.data[index].x - 5;
+            greenAlign = 'right';
+            drawGreen = true;
+          }
+          
+          if (drawRed) {
+            ctx.textAlign = redAlign;
+            ctx.fillText(redPct, redX, yPos);
+          }
+          if (drawGreen) {
+            ctx.textAlign = greenAlign;
+            ctx.fillText(greenPct, greenX, yPos);
+          }
+          
+          let maxX = Math.max(
+            metaIp.data[index] ? metaIp.data[index].x : 0,
+            metaComp.data[index] ? metaComp.data[index].x : 0,
+            metaPend.data[index] ? metaPend.data[index].x : 0
+          );
+          if (maxX > 0) {
+            ctx.textAlign = 'left';
+            ctx.fillText(` ${data.total} trạm`, maxX + 5, yPos);
+          }
+        });
+        ctx.restore();
+      }
+    };
 
     const ctxCat = document.getElementById('chart-categories');
     if (ctxCat) {
@@ -1318,78 +1963,146 @@ const App = {
       window.chartCatInstance = new Chart(ctxCat, {
         type: 'bar',
         data: {
-          labels: catLabels,
+          labels: cLabels,
           datasets: [
-            { label: 'Hoàn thành', data: catComp, backgroundColor: '#10b981' },
-            { label: 'Đang thực hiện', data: catIp, backgroundColor: '#ef4444' },
-            { label: 'Chưa thực hiện', data: catP, backgroundColor: '#475569' }
+            { label: 'Đang thực hiện', data: cIp, backgroundColor: '#ef4444', maxBarThickness: 24 },
+            { label: 'Hoàn thành', data: cComp, backgroundColor: '#10b981', maxBarThickness: 24 },
+            { label: 'Chưa thực hiện', data: cPend, backgroundColor: '#475569', maxBarThickness: 24 }
           ]
         },
+        plugins: [customCatPlugin],
         options: {
+          indexAxis: 'y',
           responsive: true,
           maintainAspectRatio: false,
+          layout: { padding: { right: window.innerWidth < 768 ? 25 : 100 } },
           scales: {
-            x: { stacked: true, ticks: { color: '#cbd5e1' } },
+            x: { stacked: true, ticks: { color: '#cbd5e1' }, display: false },
             y: { stacked: true, ticks: { color: '#cbd5e1' } }
           },
           plugins: {
+            legend: { position: 'bottom', labels: { color: '#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 } } },
+            title: { display: true, text: 'Tiến độ theo Phân loại', color: '#f8fafc' },
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  let label = context.dataset.label || '';
-                  if (label) label += ': ';
-                  if (context.parsed.y !== null) {
-                    label += context.parsed.y;
-                    let total = 0;
-                    context.chart.data.datasets.forEach(ds => { total += ds.data[context.dataIndex]; });
-                    if (total > 0) {
-                      const pct = ((context.parsed.y / total) * 100).toFixed(2);
-                      label += ` (${pct}%)`;
-                    }
+                  const pName = context.label;
+                  const data = window._catData ? window._catData[pName] : null;
+                  if (data) {
+                    const pct = data.total > 0 ? ((data.comp / data.total) * 100).toFixed(2) : 0;
+                    return [
+                      context.dataset.label + ': ' + context.parsed.x,
+                      `Hoàn thành: ${pct}%`,
+                      `Tiến độ: ${data.comp} / ${data.total} trạm`
+                    ];
                   }
-                  return label;
+                  return context.dataset.label + ': ' + context.parsed.x;
                 }
               }
-            },
-            legend: { position: 'bottom', labels: { color: '#cbd5e1' } },
-            title: { display: true, text: 'Theo Phân loại', color: '#f8fafc' }
+            }
           }
         }
       });
     }
-
-    // 3. Partners % Completion Chart
+    
+    // 3. Partners % Completion Chart (Horizontal)
     const partners = {};
     sites.forEach(s => {
       const p = String(s['Đối tác'] || 'Khác').trim();
-      if (!partners[p]) partners[p] = { total: 0, comp: 0 };
+      if (!partners[p]) partners[p] = { total: 0, comp: 0, ip: 0, p: 0 };
       partners[p].total++;
-      if (DataService.getSiteStatus(s) === 'completed') {
-        partners[p].comp++;
-      }
+      const status = DataService.getSiteStatus(s);
+      if (status === 'completed') partners[p].comp++;
+      else if (status === 'in_progress') partners[p].ip++;
+      else partners[p].p++;
     });
 
-    const pKeys = Object.keys(partners);
-    pKeys.sort((a, b) => {
-      const pA = partners[a].total > 0 ? (partners[a].comp / partners[a].total) : 0;
-      const pB = partners[b].total > 0 ? (partners[b].comp / partners[b].total) : 0;
-      return pA - pB;
-    });
-
+    const pKeys = Object.keys(partners).sort((a,b) => partners[b].total - partners[a].total);
     const pLabels = pKeys;
-    window._partnersData = partners; // Save for tooltip
-    const pData = pLabels.map(p => {
-      const tot = partners[p].total;
-      return tot > 0 ? parseFloat(((partners[p].comp / tot) * 100).toFixed(2)) : 0;
-    });
+    const pComp = pKeys.map(k => partners[k].comp);
+    const pIp = pKeys.map(k => partners[k].ip);
+    const pPend = pKeys.map(k => partners[k].p);
+    
+    window._partnersData = partners;
 
-    const pColors = pData.map(val => {
-      if (val === 100) return '#3b82f6'; // Xanh dương
-      if (val >= 80) return '#15803d';   // Xanh lá đậm
-      if (val >= 50) return '#22c55e';   // Xanh lá
-      if (val >= 25) return '#f97316';   // Cam
-      return '#ef4444';                  // Đỏ
-    });
+    const customPartPlugin = {
+      id: 'customPartLabels',
+      afterDatasetsDraw(chart, args, options) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.font = '11px Arial';
+        ctx.fillStyle = document.documentElement.getAttribute('data-pdf-export') ? '#000000' : '#cbd5e1';
+        ctx.textBaseline = 'middle';
+        
+        const metaIp = chart.getDatasetMeta(0);
+        const metaComp = chart.getDatasetMeta(1);
+        const metaPend = chart.getDatasetMeta(2);
+        
+        chart.data.labels.forEach((label, index) => {
+          const data = window._partnersData ? window._partnersData[label] : null;
+          if (!data || data.total === 0) return;
+          
+          const widthRed = metaIp.data[index] ? metaIp.data[index].x - metaIp.data[index].base : 0;
+          const widthGreen = metaComp.data[index] ? metaComp.data[index].x - metaComp.data[index].base : 0;
+          
+          const hasRed = data.ip > 0;
+          const hasGreen = data.comp > 0;
+          const yPos = metaIp.data[index] ? metaIp.data[index].y : (metaComp.data[index] ? metaComp.data[index].y : 0);
+          
+          let drawRed = false;
+          let redX = 0;
+          let redAlign = 'right';
+          const redPct = (data.ip / data.total * 100).toFixed(2) + '%';
+          
+          if (hasRed) {
+            if (hasGreen) {
+              redX = metaComp.data[index].base + 5;
+              redAlign = 'left';
+              if (widthGreen > 75) drawRed = true;
+            } else {
+              if (widthRed > 30) {
+                redX = metaIp.data[index].x - 5;
+                redAlign = 'right';
+                drawRed = true;
+              }
+            }
+          }
+          
+          let drawGreen = false;
+          let greenX = 0;
+          let greenAlign = 'right';
+          const greenPct = (data.comp / data.total * 100).toFixed(2) + '%';
+          
+          if (hasGreen && widthGreen > 30) {
+            greenX = metaComp.data[index].x - 5;
+            greenAlign = 'right';
+            drawGreen = true;
+          }
+          
+          if (drawRed) {
+            ctx.textAlign = redAlign;
+            ctx.fillText(redPct, redX, yPos);
+          }
+          if (drawGreen) {
+            ctx.textAlign = greenAlign;
+            ctx.fillText(greenPct, greenX, yPos);
+          }
+          
+          let maxX = Math.max(
+            metaIp.data[index] ? metaIp.data[index].x : 0,
+            metaComp.data[index] ? metaComp.data[index].x : 0,
+            metaPend.data[index] ? metaPend.data[index].x : 0
+          );
+          if (maxX > 0) {
+            const isMobile = window.innerWidth < 768;
+            const suffix = isMobile ? '' : ' trạm';
+            ctx.textAlign = 'left';
+            ctx.fillText(` ${data.total}${suffix}`, maxX + 5, yPos);
+          }
+        });
+        ctx.restore();
+      }
+    };
 
     const ctxPart = document.getElementById('chart-partners');
     if (ctxPart) {
@@ -1398,63 +2111,92 @@ const App = {
         type: 'bar',
         data: {
           labels: pLabels,
-          datasets: [{
-            label: '% Hoàn thành',
-            data: pData,
-            backgroundColor: pColors
-          }]
+          datasets: [
+            { label: 'Đang thực hiện', data: pIp, backgroundColor: '#ef4444', maxBarThickness: 24 },
+            { label: 'Hoàn thành', data: pComp, backgroundColor: '#10b981', maxBarThickness: 24 },
+            { label: 'Chưa thực hiện', data: pPend, backgroundColor: '#475569', maxBarThickness: 24 }
+          ]
         },
+        plugins: [customPartPlugin],
         options: {
+          indexAxis: 'y',
           responsive: true,
           maintainAspectRatio: false,
+          layout: { padding: { right: window.innerWidth < 768 ? 25 : 100 } },
           scales: {
-            y: { beginAtZero: true, max: 100, ticks: { color: '#cbd5e1' } },
-            x: { ticks: { color: '#cbd5e1' } }
-          },
-          layout: {
-            padding: { top: 20 }
+            x: { stacked: true, ticks: { color: '#cbd5e1' }, display: false },
+            y: { stacked: true, ticks: { color: '#cbd5e1' } }
           },
           plugins: {
+            legend: { position: 'bottom', labels: { color: '#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 } } },
+            title: { display: true, text: 'Tiến độ theo Đối tác', color: '#f8fafc' },
             tooltip: {
               callbacks: {
                 label: function(context) {
                   const pName = context.label;
                   const data = window._partnersData ? window._partnersData[pName] : null;
                   if (data) {
+                    const pct = data.total > 0 ? ((data.comp / data.total) * 100).toFixed(2) : 0;
                     return [
-                      `Tiến độ: ${context.parsed.y.toFixed(2)}%`,
-                      `Hoàn thành: ${data.comp} / ${data.total} trạm`
+                      context.dataset.label + ': ' + context.parsed.x,
+                      `Hoàn thành: ${pct}%`,
+                      `Tiến độ: ${data.comp} / ${data.total} trạm`
                     ];
                   }
-                  return `Tiến độ: ${context.parsed.y.toFixed(2)}%`;
+                  return context.dataset.label + ': ' + context.parsed.x;
                 }
               }
-            },
-            legend: { display: false },
-            title: { display: true, text: '% Hoàn thành theo Đối tác', color: '#f8fafc' }
+            }
           }
-        },
-        plugins: [{
-          id: 'topLabels',
-          afterDatasetsDraw(chart, args, pluginOptions) {
-            const { ctx, data } = chart;
-            ctx.save();
-            ctx.font = '600 11px "Inter", sans-serif';
-            ctx.fillStyle = '#f8fafc';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            chart.getDatasetMeta(0).data.forEach((datapoint, index) => {
-              const value = data.datasets[0].data[index];
-              if (value > 0 || value === 0) {
-                const text = value.toFixed(2) + '%';
-                ctx.fillText(text, datapoint.x, datapoint.y - 4);
-              }
-            });
-            ctx.restore();
-          }
-        }]
+        }
       });
     }
+    
+    // Add mobile custom views
+    if (window.innerWidth < 768) {
+      if (window._catData) this.renderMobileChartView(window._catData, 'mobile-chart-categories', 'Tiến độ chi tiết theo Phân loại');
+    }
+  },
+
+  renderMobileChartView(dataObj, containerId, title) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    const keys = Object.keys(dataObj).sort((a,b) => dataObj[b].total - dataObj[a].total);
+    
+    let html = `
+      <div class="section-title" style="font-size:14px;font-weight:600;margin-bottom:12px;border-left:3px solid var(--color-blue);padding-left:8px;color:#fff;">
+        ${title}
+      </div>
+      <div class="chart-legend">
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--color-red)"></div> Đang làm (Đỏ)</div>
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--color-green)"></div> Đã xong (Xanh)</div>
+        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--color-pending)"></div> Chưa làm</div>
+      </div>
+      <div class="partner-list">
+    `;
+    
+    keys.forEach((key, index) => {
+      const data = dataObj[key];
+      const pct = data.total > 0 ? (data.comp / data.total * 100).toFixed(2) : 0;
+      const pctIp = data.total > 0 ? (data.ip / data.total * 100).toFixed(2) : 0;
+      
+      html += `
+        <div class="partner-item">
+          <div class="partner-info">
+            <span class="partner-name">${index + 1}. ${key} (Tỷ lệ: ${pct}%)</span>
+            <span class="partner-stats">Tổng: <b>${data.total}</b> trạm</span>
+          </div>
+          <div class="stacked-bar">
+            <div class="segment seg-prog" style="width: ${pctIp}%;" title="Đang làm">${data.ip > 0 ? Math.round(pctIp) + '%' : ''}</div>
+            <div class="segment seg-comp" style="width: ${pct}%;" title="Hoàn thành">${data.comp > 0 ? Math.round(pct) + '%' : ''}</div>
+          </div>
+        </div>
+      `;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
   },
 
   // ============================================================
@@ -1477,6 +2219,15 @@ const App = {
       if (filterId === 'daily_plan_completed') filtered = planSites.filter(s => DataService.getSiteStatus(s) === 'completed');
       if (filterId === 'daily_plan_in_progress') filtered = planSites.filter(s => DataService.getSiteStatus(s) === 'in_progress');
       if (filterId === 'daily_plan_pending') filtered = planSites.filter(s => { const st = DataService.getSiteStatus(s); return st !== 'completed' && st !== 'in_progress'; });
+      if (filterId === 'daily_plan_checkin') {
+        const checkinLog = window._checkinLog || [];
+        filtered = planSites.filter(s => {
+          for (const k in s) {
+            if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && s[k] && String(s[k]).trim() !== '') return true;
+          }
+          return checkinLog.some(c => c.site === s['Site']);
+        });
+      }
     } else if (filterId.startsWith('cat_')) {
       const parts = filterId.split('_');
       let cat = 'Khác';
@@ -1502,6 +2253,36 @@ const App = {
         if (status === 'in_progress') filtered = groupSites.filter(s => DataService.getSiteStatus(s) === 'in_progress');
         if (status === 'pending') filtered = groupSites.filter(s => { const st = DataService.getSiteStatus(s); return st !== 'completed' && st !== 'in_progress'; });
       }
+    } else if (filterId.startsWith('partner_')) {
+      // partner_{partnerName}_{status}
+      const prefixLen = 'partner_'.length;
+      const rest = filterId.slice(prefixLen); // e.g. "Viettel_completed"
+      const lastUs = rest.lastIndexOf('_');
+      const partnerName = rest.slice(0, lastUs);
+      const status = rest.slice(lastUs + 1);
+      // Only plan sites for today
+      const today = new Date();
+      const isToday = (val) => {
+        const s = String(val || '');
+        const m1 = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (m1) { const d=parseInt(m1[1]), mo=parseInt(m1[2])-1, y=parseInt(m1[3]); return d===today.getDate()&&mo===today.getMonth()&&y===today.getFullYear(); }
+        return false;
+      };
+      const partnerSites = this.sites.filter(s => String(s['Đối tác'] || '').trim() === partnerName && isToday(s['Kế hoạch ngày']));
+      if (status === 'all') filtered = partnerSites;
+      else if (status === 'completed') filtered = partnerSites.filter(s => DataService.getSiteStatus(s) === 'completed');
+      else if (status === 'in_progress') filtered = partnerSites.filter(s => DataService.getSiteStatus(s) === 'in_progress');
+      else if (status === 'pending') filtered = partnerSites.filter(s => { const st = DataService.getSiteStatus(s); return st !== 'completed' && st !== 'in_progress'; });
+      else if (status === 'checkin') {
+        const checkinLog = window._checkinLog || [];
+        filtered = partnerSites.filter(s => {
+          for (const k in s) {
+            if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && s[k] && String(s[k]).trim() !== '') return true;
+          }
+          return checkinLog.some(c => c.site === s['Site']);
+        });
+      }
+      else filtered = partnerSites;
     }
 
     this.currentListData = filtered;
@@ -1510,7 +2291,14 @@ const App = {
     const tbody = document.querySelector('#list-modal-table tbody');
     const thead = document.querySelector('#list-modal-table thead');
     
-    thead.innerHTML = '<tr><th>Mã trạm</th><th>Phân loại</th><th>4G</th><th>5G</th><th>Đối tác</th><th>TKTU</th></tr>';
+    
+    const isCheckinMode = filterId && filterId.includes('checkin');
+    if (isCheckinMode) {
+      thead.innerHTML = '<tr><th>Mã trạm</th><th>Phân loại</th><th>4G</th><th>5G</th><th>Đối tác</th><th>Checkin</th></tr>';
+    } else {
+      thead.innerHTML = '<tr><th>Mã trạm</th><th>Phân loại</th><th>4G</th><th>5G</th><th>Đối tác</th><th>TKTU</th></tr>';
+    }
+
     
     const formatProgress = (p, type, cat) => {
       if (cat === '5G Z' && type === '4G') return '';
@@ -1530,7 +2318,15 @@ const App = {
         <td class="num">${formatProgress(s['Tiến độ 4G'], '4G', s['Phân loại'])}</td>
         <td class="num">${formatProgress(s['Tiến độ 5G'], '5G', s['Phân loại'])}</td>
         <td>${s['Đối tác'] || '-'}</td>
-        <td>${s['TKTU ONSITE'] || '-'}</td>
+                <td>${(() => {
+          if (isCheckinMode) {
+            for (const k in s) {
+              if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && s[k]) return s[k];
+            }
+            return '-';
+          }
+          return s['TKTU ONSITE'] || '-';
+        })()}</td>
       </tr>`;
     }).join('');
 
@@ -1590,59 +2386,227 @@ const App = {
   // ============================================================
   // Exports
   // ============================================================
-    cleanSiteForExport(s) {
-    const copy = { ...s };
-    delete copy['Long'];
-    delete copy['Lat'];
-    delete copy['rowIdx'];
-    delete copy['Ghi chú (TKTU ONSITE)'];
-    delete copy['NOTE TKTU'];
-    delete copy['SĐT TKTU ONSITE'];
-    delete copy['Đối tác'];
-    delete copy['Đội thực hiện'];
-    delete copy['SĐT'];
-    delete copy['FT'];
-    delete copy['SĐT FT'];
-    delete copy['TKTU ONSITE'];
-    delete copy['Kế hoạch ngày'];
-
+    cleanSiteForExport(site, isCheckinMode = false) {
     const ordered = {};
-    ordered['Site'] = copy['Site'];
-    ordered['Phân loại'] = copy['Phân loại'];
-    ordered['Huyện'] = copy['Huyện'];
-    ordered['Phương án Swap'] = copy['Phương án Swap'];
-    ordered['Tiến độ 4G'] = copy['Tiến độ 4G'];
-    ordered['Tiến độ 5G'] = copy['Tiến độ 5G'];
-    const cat = String(copy['Phân loại'] || '').trim();
-    if (cat === '4G Z') ordered['Tiến độ 5G'] = '';
-    if (cat === '5G Z') ordered['Tiến độ 4G'] = '';
-    ordered['Status'] = copy['Status'] || '';
+    ordered['Site'] = site['Site'] || '';
+    ordered['Phân loại'] = site['Phân loại'] || '';
+    ordered['Huyện'] = site['Huyện'] || '';
+    ordered['Phương án Swap'] = site['Phương án Swap'] || '';
     
-    // Copy remaining
-    Object.keys(copy).forEach(k => {
-      if (!ordered.hasOwnProperty(k)) ordered[k] = copy[k];
-    });
+    let p4g = site['Tiến độ 4G'] || '';
+    let p5g = site['Tiến độ 5G'] || '';
+    const cat = String(site['Phân loại'] || '').trim();
+    if (cat === '4G Z') p5g = '';
+    if (cat === '5G Z') p4g = '';
+    
+    ordered['Tiến độ 4G'] = p4g;
+    ordered['Tiến độ 5G'] = p5g;
+    ordered['Status'] = DataService.getStatusLabel(DataService.getSiteStatus(site)) || '';
+    ordered['User cập nhật'] = site['User cập nhật'] || '';
+    ordered['Ngày cập nhật'] = site['Ngày cập nhật'] || '';
+
+    if (isCheckinMode) {
+      let checkinVal = '';
+      for (const k in site) {
+        if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && site[k]) {
+          checkinVal = site[k]; break;
+        }
+      }
+      ordered['Checkin'] = checkinVal;
+    }
+    
     return ordered;
   },
 
   exportDashboardPDF() {
     const role = Auth.getRole();
-    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (role !== 'admin') return App.showToast('Chỉ Quản trị viên mới được xuất báo cáo', 'error');
     if (!window.html2pdf) return App.showToast('Lỗi: Thư viện PDF chưa tải', 'error');
-    const element = document.querySelector('.dashboard-container');
-    const opt = {
-      margin:       10,
-      filename:     'Bao_Cao_Tien_Do_SWAP.pdf',
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(element).save();
-  },
+    
+    App.showLoading('Đang xuất Báo cáo PDF...');
+    
+    setTimeout(() => {
+      const element = document.querySelector('.dashboard-container');
+      
+      // Save original states
+      const headerBtns = document.querySelector('.dashboard-header div');
+      const headerTitle = document.querySelector('.dashboard-header h2');
+      const exportBtn = document.getElementById('dashboard-export-btn');
+      const closeBtn = document.getElementById('dashboard-close-btn');
+      const recentUpdates = document.getElementById('dash-recent-updates');
+      const recentUpdatesParent = recentUpdates ? recentUpdates.parentNode : null;
+      
+      const originalTitleText = headerTitle.innerHTML;
+      headerTitle.innerHTML = '📊 BÁO CÁO TIẾN ĐỘ'; // Change title
+      
+      const originalStyles = [];
+      
+      if (headerBtns) {
+        originalStyles.push({ el: headerBtns, display: headerBtns.style.display });
+        headerBtns.style.display = 'none';
+      } else {
+        if (exportBtn) {
+          originalStyles.push({ el: exportBtn, display: exportBtn.style.display });
+          exportBtn.style.display = 'none';
+        }
+        if (closeBtn) {
+          originalStyles.push({ el: closeBtn, display: closeBtn.style.display });
+          closeBtn.style.display = 'none';
+        }
+      }
+      
+      if (recentUpdatesParent) {
+        originalStyles.push({ el: recentUpdatesParent, display: recentUpdatesParent.style.display });
+        recentUpdatesParent.style.display = 'none';
+      }
+      
+      document.documentElement.setAttribute('data-pdf-export', 'true');
+      
+      // Inject gorgeous Light Theme for PDF
+      const printStyle = document.createElement('style');
+      printStyle.id = 'pdf-print-style';
+      printStyle.innerHTML = `
+        * { font-weight: 600 !important; }
+        .dashboard-container {
+           background-color: #ffffff !important;
+           color: #000000 !important;
+           padding: 30px !important;
+           border: none !important;
+           box-shadow: none !important;
+        }
+        .dashboard-header {
+           background: #ffffff !important;
+           border-bottom: 4px solid #1d4ed8 !important;
+           padding-bottom: 15px !important;
+           margin-bottom: 30px !important;
+        }
+        .dashboard-header h2 {
+           color: #1e3a8a !important;
+           font-size: 36px !important;
+           font-weight: 800 !important;
+           text-align: center !important;
+           justify-content: center !important;
+           width: 100% !important;
+           margin-bottom: 0 !important;
+           text-transform: uppercase !important;
+           text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .dash-card {
+           background: #ffffff !important;
+           border: 2px solid #e2e8f0 !important;
+           box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05) !important;
+        }
+        .dash-section {
+           background: #ffffff !important;
+           border: 2px solid #e2e8f0 !important;
+           box-shadow: 0 6px 12px rgba(0, 0, 0, 0.05) !important;
+        }
+        .dash-card-label {
+           color: #475569 !important;
+           font-weight: 800 !important;
+           font-size: 15px !important;
+        }
+        .dash-card-value {
+           font-weight: 800 !important;
+        }
+        .dash-table th {
+           background: #f1f5f9 !important;
+           color: #0f172a !important;
+           font-weight: 800 !important;
+           border-bottom: 2px solid #cbd5e1 !important;
+        }
+        .dash-table td {
+           border-bottom: 1px solid #e2e8f0 !important;
+           color: #000000 !important;
+           font-weight: 700 !important;
+        }
+        .dash-table tr:nth-child(even) {
+           background: #f8fafc !important;
+        }
+        .dash-section-title {
+           color: #1e3a8a !important;
+           border-left: 6px solid #2563eb !important;
+           background: linear-gradient(90deg, #eff6ff, #ffffff) !important;
+           padding: 12px 20px !important;
+           border-radius: 6px !important;
+           font-size: 19px !important;
+           font-weight: 800 !important;
+        }
+        .card-total .dash-card-value { color: #1d4ed8 !important; }
+        .card-completed .dash-card-value { color: #15803d !important; }
+        .card-progress .dash-card-value { color: #b91c1c !important; }
+        .card-pending .dash-card-value { color: #475569 !important; }
+      `;
+      document.head.appendChild(printStyle);
 
+      // Update Chart.js colors to bold dark text
+      const updateChartColor = (chart, color) => {
+         if (!chart) return;
+         if (chart.options.scales && chart.options.scales.x && chart.options.scales.x.ticks) {
+             chart.options.scales.x.ticks.color = color;
+             chart.options.scales.x.ticks.font = { weight: 'bold', size: 14 };
+         }
+         if (chart.options.scales && chart.options.scales.y && chart.options.scales.y.ticks) {
+             chart.options.scales.y.ticks.color = color;
+             chart.options.scales.y.ticks.font = { weight: 'bold', size: 14 };
+         }
+         if (chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels) {
+             chart.options.plugins.legend.labels.color = color;
+             chart.options.plugins.legend.labels.font = { weight: 'bold', size: 14 };
+         }
+         if (chart.options.plugins && chart.options.plugins.title) {
+             chart.options.plugins.title.color = color;
+             chart.options.plugins.title.font = { weight: 'bold', size: 16 };
+         }
+         chart.update('none'); // Update without animation
+      }
+      
+      updateChartColor(window.chartOverallInstance, '#000000');
+      updateChartColor(window.chartCatInstance, '#000000');
+      updateChartColor(window.chartPartInstance, '#000000');
+      updateChartColor(window.chartHuyenInstance, '#000000');
+
+      // Small delay for charts to re-render
+      setTimeout(() => {
+        const width = element.scrollWidth;
+        const height = element.scrollHeight + 40;
+        
+        const opt = {
+          margin:       [10, 0],
+          filename:     'Bao_Cao_Tien_Do.pdf',
+          image:        { type: 'jpeg', quality: 1 },
+          html2canvas:  { scale: 2, useCORS: true, windowWidth: width, windowHeight: height, scrollY: 0, backgroundColor: '#ffffff' },
+          jsPDF:        { unit: 'px', format: [width, height + 20], orientation: width > height ? 'landscape' : 'portrait' }
+        };
+        
+        const restoreAll = () => {
+          App.hideLoading();
+          originalStyles.forEach(item => {
+            if (item.el) item.el.style.display = item.display;
+          });
+          headerTitle.innerHTML = originalTitleText; // Restore title
+          document.documentElement.removeAttribute('data-pdf-export');
+          printStyle.remove();
+          
+          updateChartColor(window.chartOverallInstance, '#cbd5e1');
+          updateChartColor(window.chartCatInstance, '#cbd5e1');
+          updateChartColor(window.chartPartInstance, '#cbd5e1');
+          updateChartColor(window.chartHuyenInstance, '#cbd5e1');
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+          restoreAll();
+        }).catch(err => {
+          console.error(err);
+          App.showToast('Lỗi khi xuất PDF', 'error');
+          restoreAll();
+        });
+      }, 500); // 500ms allows canvas to flush its render queue
+    }, 500);
+  },
   exportDashboardExcel() {
     const role = Auth.getRole();
-    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     
     const wb = XLSX.utils.book_new();
@@ -1658,12 +2622,12 @@ const App = {
       return st !== 'completed' && st !== 'in_progress';
     });
 
-    const allActive = activeSites.map(s => this.cleanSiteForExport(s));
+    const allActive = activeSites.map(s => this.cleanSiteForExport(s, false));
     const wsAll = XLSX.utils.json_to_sheet(allActive);
     XLSX.utils.book_append_sheet(wb, wsAll, "Hoàn thành - Đang TH");
 
     if (pendingSites.length > 0) {
-      const allPending = pendingSites.map(s => this.cleanSiteForExport(s));
+      const allPending = pendingSites.map(s => this.cleanSiteForExport(s, false));
       const wsPending = XLSX.utils.json_to_sheet(allPending);
       XLSX.utils.book_append_sheet(wb, wsPending, "Chưa thực hiện");
     }
@@ -1673,25 +2637,26 @@ const App = {
 
   exportListExcel() {
     const role = Auth.getRole();
-    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     if (!this.currentListData || this.currentListData.length === 0) return App.showToast('Không có dữ liệu', 'error');
     
     const exportData = this.currentListData;
 
-    const cleanData = exportData.map(s => this.cleanSiteForExport(s));
+    const isCheckinMode = this.currentListFilter && this.currentListFilter.includes('checkin');
+    const cleanData = exportData.map(s => this.cleanSiteForExport(s, isCheckinMode));
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(cleanData);
     XLSX.utils.book_append_sheet(wb, ws, "Danh sách");
     
-    let safeName = (this.currentListTitle || 'Danh_sach').replace(/[^a-zA-Z0-9]/g, '_');
+    let safeName = (this.currentListTitle || 'Danh_sach').replace(/[\\/:*?"<>|]/g, '_');
     XLSX.writeFile(wb, safeName + ".xlsx");
   },
 
   exportDetailExcel() {
     const role = Auth.getRole();
-    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     if (!this.currentDetailSite) return;
 
@@ -1713,7 +2678,7 @@ const App = {
 
   exportDetailPDF() {
     const role = Auth.getRole();
-    if (role === 'view' || role === 'view_limited') return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.html2pdf) return App.showToast('Lỗi: Thư viện PDF chưa tải', 'error');
     const element = document.querySelector('#detail-modal .modal-body');
     const opt = {
@@ -1751,7 +2716,7 @@ const App = {
 
     try {
       const url = `${AppConfig.WEATHER_API}?latitude=${lat}&longitude=${lng}&hourly=temperature_2m,precipitation,weather_code,wind_speed_10m&forecast_hours=24&timezone=Asia/Ho_Chi_Minh`;
-      const response = await fetch(url);
+      const response = await fetch(url, { cache: 'no-store' });
       if (!response.ok) throw new Error('API error');
       const data = await response.json();
 
@@ -1838,6 +2803,41 @@ const App = {
   // ============================================================
   // Diagrams (Google Drive auto-lookup)
   // ============================================================
+    loadCheckinImage(site) {
+    const container = document.getElementById('checkin-media-content');
+    if (!container) return;
+
+    let linkKey = Object.keys(site).find(k => {
+      let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
+      return n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh';
+    });
+
+    const imageUrl = linkKey ? String(site[linkKey] || '').trim() : '';
+
+    if (!imageUrl || (!imageUrl.includes('drive.google.com') && !imageUrl.includes('http'))) {
+      container.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px;text-align:center;">Chưa có ảnh check-in.</div>';
+      return;
+    }
+
+    // Extract file ID
+    let fileId = '';
+    const match = imageUrl.match(/d\/([a-zA-Z0-9_-]+)/);
+    if (match) fileId = match[1];
+    else if (imageUrl.includes('id=')) fileId = imageUrl.split('id=')[1].split('&')[0];
+
+    if (fileId) {
+      const thumbUrl = `https://lh3.googleusercontent.com/d/${fileId}=w400`;
+      container.innerHTML = `<div class="diagram-grid">
+        <div class="diagram-item" onclick="App.openDiagramViewer('${fileId}', 'image')">
+          <img src="${thumbUrl}" alt="Ảnh Check-in" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'diagram-error\'>Không tải được ảnh</div>'">
+          <div class="diagram-name">Ảnh Check-in</div>
+        </div>
+      </div>`;
+    } else {
+      container.innerHTML = `<div style="padding:12px;text-align:center;"><a href="${imageUrl}" target="_blank" style="color:var(--color-blue);text-decoration:none;">Xem ảnh Check-in</a></div>`;
+    }
+  },
+
   async loadDiagrams(siteName) {
     const section = document.getElementById('diagram-section');
     const container = document.getElementById('diagram-content');
@@ -1940,6 +2940,22 @@ const App = {
               step: 0.3
             });
             content.addEventListener('wheel', panzoom.zoomWithWheel);
+            
+            let lastTap = 0;
+            img.addEventListener('click', (e) => {
+              const currentTime = new Date().getTime();
+              const tapLength = currentTime - lastTap;
+              if (tapLength < 500 && tapLength > 0) {
+                const scale = panzoom.getScale();
+                if (scale > 1) {
+                  panzoom.zoom(1, { animate: true });
+                } else {
+                  panzoom.zoomToPoint(3, e, { animate: true });
+                }
+                e.preventDefault();
+              }
+              lastTap = currentTime;
+            });
           };
           // Fallback if image is already cached
           if (img.complete) {
