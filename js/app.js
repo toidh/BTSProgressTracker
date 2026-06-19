@@ -181,9 +181,6 @@ const App = {
       if (window.AIAssistant) window.AIAssistant.openChat();
     });
 
-    // Initialize AI Assistant (fetch knowledge base, setup chat UI)
-    if (window.AIAssistant) window.AIAssistant.init();
-
     // === Settings ===
     const settingsBtn = document.getElementById('settings-btn');
     if (settingsBtn) {
@@ -717,6 +714,10 @@ const App = {
         
         const siteIndex = this.sites.findIndex(s => String(s['Site']).trim().toUpperCase() === String(siteStr).trim().toUpperCase());
         if (siteIndex >= 0) {
+          // Update local 'Check-in' timestamp column for immediate dashboard display
+          const now = new Date();
+          const checkinTimeStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+          this.sites[siteIndex]['Check-in'] = checkinTimeStr;
           if (result.updatedProgress) {
             if (result.updatedProgress.p4) this.sites[siteIndex]['Tiến độ 4G'] = result.updatedProgress.p4;
             if (result.updatedProgress.p5) this.sites[siteIndex]['Tiến độ 5G'] = result.updatedProgress.p5;
@@ -1377,14 +1378,39 @@ const App = {
       const numTeams = info.teams.size || 1;
       
       let checkinCount = 0;
+      const isCheckinToday = (val) => {
+        const str = String(val || '').trim();
+        if (!str) return false;
+        // Try dd/MM/yyyy
+        const m1 = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (m1) {
+          return parseInt(m1[1]) === todayDay && (parseInt(m1[2]) - 1) === todayMonth && parseInt(m1[3]) === todayYear;
+        }
+        // Try yyyy-MM-dd
+        const m2 = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (m2) {
+          return parseInt(m2[3]) === todayDay && (parseInt(m2[2]) - 1) === todayMonth && parseInt(m2[1]) === todayYear;
+        }
+        // Fallback: try Date parse
+        try {
+          const d = new Date(str);
+          if (!isNaN(d.getTime())) {
+            return d.getDate() === todayDay && d.getMonth() === todayMonth && d.getFullYear() === todayYear;
+          }
+        } catch(e) {}
+        return false;
+      };
       partnerSites.forEach(s => {
         let hasCheckin = false;
-        // Check if any sheet column resembling 'checkin' has value
+        // Check if the 'Check-in' timestamp column has a TODAY value
+        // Exclude image-link columns (linkanhcheckin, anhcheckin, linkanh)
         for (const k in s) {
           let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
-          if ((n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh' || n.includes('checkin')) && s[k] && String(s[k]).trim() !== '') {
-            hasCheckin = true;
-            break;
+          if (n.includes('checkin') && !n.includes('linkanh') && !n.includes('anhcheckin') && s[k] && String(s[k]).trim() !== '') {
+            if (isCheckinToday(s[k])) {
+              hasCheckin = true;
+              break;
+            }
           }
         }
         // Fallback to local session checkinLog for immediate feedback
@@ -2223,10 +2249,24 @@ const App = {
       if (filterId === 'daily_plan_pending') filtered = planSites.filter(s => { const st = DataService.getSiteStatus(s); return st !== 'completed' && st !== 'in_progress'; });
       if (filterId === 'daily_plan_checkin') {
         const checkinLog = window._checkinLog || [];
+        const now = new Date();
+        const tDay = now.getDate(), tMonth = now.getMonth(), tYear = now.getFullYear();
+        const isCheckinTodayFilter = (val) => {
+          const str = String(val || '').trim();
+          if (!str) return false;
+          const m1 = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          if (m1) return parseInt(m1[1]) === tDay && (parseInt(m1[2]) - 1) === tMonth && parseInt(m1[3]) === tYear;
+          const m2 = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+          if (m2) return parseInt(m2[3]) === tDay && (parseInt(m2[2]) - 1) === tMonth && parseInt(m2[1]) === tYear;
+          try { const d = new Date(str); if (!isNaN(d.getTime())) return d.getDate() === tDay && d.getMonth() === tMonth && d.getFullYear() === tYear; } catch(e) {}
+          return false;
+        };
         filtered = planSites.filter(s => {
           for (const k in s) {
             let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
-            if ((n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh' || n.includes('checkin')) && s[k] && String(s[k]).trim() !== '') return true;
+            if (n.includes('checkin') && !n.includes('linkanh') && !n.includes('anhcheckin') && s[k] && String(s[k]).trim() !== '') {
+              if (isCheckinTodayFilter(s[k])) return true;
+            }
           }
           return checkinLog.some(c => c.site === s['Site']);
         });
@@ -2278,10 +2318,23 @@ const App = {
       else if (status === 'pending') filtered = partnerSites.filter(s => { const st = DataService.getSiteStatus(s); return st !== 'completed' && st !== 'in_progress'; });
       else if (status === 'checkin') {
         const checkinLog = window._checkinLog || [];
+        const tDay = today.getDate(), tMonth = today.getMonth(), tYear = today.getFullYear();
+        const isCheckinTodayPartner = (val) => {
+          const str = String(val || '').trim();
+          if (!str) return false;
+          const m1 = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          if (m1) return parseInt(m1[1]) === tDay && (parseInt(m1[2]) - 1) === tMonth && parseInt(m1[3]) === tYear;
+          const m2 = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+          if (m2) return parseInt(m2[3]) === tDay && (parseInt(m2[2]) - 1) === tMonth && parseInt(m2[1]) === tYear;
+          try { const d = new Date(str); if (!isNaN(d.getTime())) return d.getDate() === tDay && d.getMonth() === tMonth && d.getFullYear() === tYear; } catch(e) {}
+          return false;
+        };
         filtered = partnerSites.filter(s => {
           for (const k in s) {
             let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
-            if ((n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh' || n.includes('checkin')) && s[k] && String(s[k]).trim() !== '') return true;
+            if (n.includes('checkin') && !n.includes('linkanh') && !n.includes('anhcheckin') && s[k] && String(s[k]).trim() !== '') {
+              if (isCheckinTodayPartner(s[k])) return true;
+            }
           }
           return checkinLog.some(c => c.site === s['Site']);
         });
@@ -3005,8 +3058,6 @@ const App = {
     }
   }
 };
-
-window.App = App;
 
 // ============================================================
 // Start App

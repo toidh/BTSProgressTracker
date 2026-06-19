@@ -368,10 +368,7 @@ const DataService = {
     try {
       const cachedText = localStorage.getItem('bts_ai_knowledge_text');
       const cachedHash = cachedText ? (localStorage.getItem('bts_ai_knowledge_hash') || '') : '';
-      const result = await Promise.race([
-        this.apiCall({ action: 'getAIKnowledge', cachedHash: cachedHash }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout: Server xử lý quá lâu (có thể do đang đọc file PDF lớn)")), 15000))
-      ]);
+      const result = await this.apiCall({ action: 'getAIKnowledge', cachedHash: cachedHash });
       return result;
     } catch (error) {
       console.error('[DataService] getAIKnowledge failed:', error);
