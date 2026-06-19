@@ -1153,9 +1153,7 @@ const App = {
     // === Progress Bar ===
     document.getElementById('dash-progress-fill').style.width = pct + '%';
     const exportPdfBtn = document.getElementById('dashboard-export-btn');
-    if (exportPdfBtn) {
-      exportPdfBtn.style.display = Auth.getRole() === 'admin' ? 'inline-block' : 'none';
-    }
+    if (exportPdfBtn) exportPdfBtn.style.display = Auth.getRole() === 'admin' ? 'inline-block' : 'none';
     document.getElementById('dash-progress-pct').textContent = pct + '%';
 
     // === Daily Plan Report ===
@@ -1326,7 +1324,7 @@ const App = {
     if (!el) return;
 
     const role = Auth.getRole();
-    const canSeeDetail = (role === 'admin' || role === 'partner_view_limited');
+    const canSeeDetail = ['admin', 'manager', 'export'].includes(role);
 
     // Filter today's plan
     const today = new Date();
@@ -1380,7 +1378,8 @@ const App = {
         let hasCheckin = false;
         // Check if any sheet column resembling 'checkin' has value
         for (const k in s) {
-          if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && s[k] && String(s[k]).trim() !== '') {
+          let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
+          if ((n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh' || n.includes('checkin')) && s[k] && String(s[k]).trim() !== '') {
             hasCheckin = true;
             break;
           }
@@ -1436,7 +1435,7 @@ const App = {
         <td>TỔNG CỘNG</td>
         <td class="num" style="color:var(--color-blue)">${sumTeams}</td>
         <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--color-amber)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_checkin', 'Đã Check-in (Tổng)')"` : ''}>${sumCheckins}</td>
-        <td class="num ${canSeeDetail ? 'clickable-number' : ''}" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_all', 'Kế hoạch ngày (Tổng)')"` : ''}>${sumTotal}</td>
+        <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--color-blue)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_all', 'Kế hoạch ngày (Tổng)')"` : ''}>${sumTotal}</td>
         <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--color-green)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_completed', 'Hoàn thành (Tổng)')"` : ''}>${sumDone}</td>
         <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--color-red)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_in_progress', 'Đang thực hiện (Tổng)')"` : ''}>${sumInProg}</td>
         <td class="num ${canSeeDetail ? 'clickable-number' : ''}" style="color:var(--text-muted)" ${canSeeDetail ? `onclick="App.showSiteList('daily_plan_pending', 'Chưa thực hiện (Tổng)')"` : ''}>${sumNotDone}</td>
@@ -2223,7 +2222,8 @@ const App = {
         const checkinLog = window._checkinLog || [];
         filtered = planSites.filter(s => {
           for (const k in s) {
-            if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && s[k] && String(s[k]).trim() !== '') return true;
+            let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
+            if ((n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh' || n.includes('checkin')) && s[k] && String(s[k]).trim() !== '') return true;
           }
           return checkinLog.some(c => c.site === s['Site']);
         });
@@ -2277,7 +2277,8 @@ const App = {
         const checkinLog = window._checkinLog || [];
         filtered = partnerSites.filter(s => {
           for (const k in s) {
-            if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && s[k] && String(s[k]).trim() !== '') return true;
+            let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
+            if ((n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh' || n.includes('checkin')) && s[k] && String(s[k]).trim() !== '') return true;
           }
           return checkinLog.some(c => c.site === s['Site']);
         });
@@ -2407,12 +2408,17 @@ const App = {
 
     if (isCheckinMode) {
       let checkinVal = '';
+      let linkVal = '';
       for (const k in site) {
-        if (k.replace(/[- ]/g, '').toLowerCase() === 'checkin' && site[k]) {
-          checkinVal = site[k]; break;
+        let n = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\s\-]/g,'');
+        if (n === 'checkin' && site[k]) {
+          checkinVal = site[k];
+        }
+        if ((n.includes('linkanhcheckin') || n.includes('anhcheckin') || n === 'linkanh') && site[k]) {
+          linkVal = site[k];
         }
       }
-      ordered['Checkin'] = checkinVal;
+      if (checkinVal) ordered['Thời gian Check-in'] = checkinVal;
     }
     
     return ordered;
@@ -2420,7 +2426,7 @@ const App = {
 
   exportDashboardPDF() {
     const role = Auth.getRole();
-    if (role !== 'admin') return App.showToast('Chỉ Quản trị viên mới được xuất báo cáo', 'error');
+    if (role !== 'admin') return App.showToast('Chỉ Admin mới được xuất báo cáo PDF', 'error');
     if (!window.html2pdf) return App.showToast('Lỗi: Thư viện PDF chưa tải', 'error');
     
     App.showLoading('Đang xuất Báo cáo PDF...');
@@ -2606,7 +2612,7 @@ const App = {
   },
   exportDashboardExcel() {
     const role = Auth.getRole();
-    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager', 'export'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     
     const wb = XLSX.utils.book_new();
@@ -2637,7 +2643,7 @@ const App = {
 
   exportListExcel() {
     const role = Auth.getRole();
-    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager', 'export', 'doitac', 'partner_view_limited'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     if (!this.currentListData || this.currentListData.length === 0) return App.showToast('Không có dữ liệu', 'error');
     
@@ -2656,7 +2662,7 @@ const App = {
 
   exportDetailExcel() {
     const role = Auth.getRole();
-    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager', 'export'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.XLSX) return App.showToast('Lỗi: Thư viện Excel chưa tải', 'error');
     if (!this.currentDetailSite) return;
 
@@ -2678,7 +2684,7 @@ const App = {
 
   exportDetailPDF() {
     const role = Auth.getRole();
-    if (!['admin', 'manager'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
+    if (!['admin', 'manager', 'export'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
     if (!window.html2pdf) return App.showToast('Lỗi: Thư viện PDF chưa tải', 'error');
     const element = document.querySelector('#detail-modal .modal-body');
     const opt = {
