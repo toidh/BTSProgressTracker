@@ -6,11 +6,11 @@
  */
 const AppConfig = {
   // ⚠️ DÁN URL GOOGLE APPS SCRIPT CỦA BẠN VÀO ĐÂY:
-  API_URL: 'https://script.google.com/macros/s/AKfycbzzGJxszhb1vbNKF-f4NZ6QyadEem8TGWCDL1Vbsz4UJwMB0DhAEItEqFjQUHN9YuqidQ/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbzTAq6jLg7yWA8KxP5SDyg3L0KrObk9XdyizcTMLutsUtes3mcvATNDzt6w9d4TS2mo/exec',
 
   // App info
   APP_NAME: 'RF Mate',
-  APP_VERSION: '2.1.1',
+  APP_VERSION: '2.1.2',
 
   // Map defaults (centered on Bạc Liêu province)
   MAP_CENTER: [9.17684, 105.15691],
