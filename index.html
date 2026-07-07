@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=237">
+  <link rel="stylesheet" href="css/style.css?v=240">
   <style>
     /* Critical inline fallback - ensures dark theme even if CSS file fails */
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -149,6 +149,19 @@
       <!-- Measure Distance -->
       <button class="btn-icon" id="measure-btn" title="Đo khoảng cách" onclick="MapManager.toggleMeasure()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20"/><path d="M2 12l4-4"/><path d="M2 12l4 4"/><path d="M22 12l-4-4"/><path d="M22 12l-4 4"/><line x1="8" y1="9" x2="8" y2="15"/><line x1="12" y1="7" x2="12" y2="17"/><line x1="16" y1="9" x2="16" y2="15"/></svg>
+      </button>
+      <!-- Compass Reset -->
+      <button class="btn-icon" id="compass-btn" title="Xoay hướng Bắc" onclick="MapManager.resetNorth()" style="display:flex;align-items:center;justify-content:center;background:#fff;border-radius:50%;padding:4px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <svg id="map-bearing-needle" width="18" height="18" viewBox="0 0 24 24" style="transition:transform 0.1s ease-out;">
+          <!-- Red needle pointing North -->
+          <polygon points="12,2 17,12 12,12" fill="#ef4444" />
+          <polygon points="12,2 7,12 12,12" fill="#b91c1c" />
+          <!-- White/gray needle pointing South -->
+          <polygon points="12,22 17,12 12,12" fill="#e2e8f0" />
+          <polygon points="12,22 7,12 12,12" fill="#94a3b8" />
+          <!-- Center dot -->
+          <circle cx="12" cy="12" r="1.5" fill="#475569" />
+        </svg>
       </button>
       <button class="btn-icon" id="gps-btn" title="Vị trí của tôi">
         📍
@@ -603,6 +616,7 @@
        SCRIPTS
        ============================================================ -->
   <script crossorigin="anonymous" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script crossorigin="anonymous" src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
   <script crossorigin="anonymous" src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
   <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
@@ -610,14 +624,14 @@
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
   <script crossorigin="anonymous" src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="./js/config.js?v=237"></script>
-  <script src="./js/storage.js?v=237"></script>
-  <script src="./js/data.js?v=237"></script>
-  <script src="./js/auth.js?v=237"></script>
-  <script src="./js/compass.js?v=237"></script>
-  <script src="./js/ai-assistant.js?v=237"></script>
-  <script src="./js/map.js?v=237"></script>
-  <script src="./js/app.js?v=237"></script>
+  <script src="./js/config.js?v=240"></script>
+  <script src="./js/storage.js?v=240"></script>
+  <script src="./js/data.js?v=240"></script>
+  <script src="./js/auth.js?v=240"></script>
+  <script src="./js/compass.js?v=240"></script>
+  <script src="./js/ai-assistant.js?v=240"></script>
+  <script src="./js/map.js?v=240"></script>
+  <script src="./js/app.js?v=240"></script>
 
   
 

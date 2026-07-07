@@ -31,6 +31,9 @@ const MapManager = {
     const zoom = savedState ? savedState.zoom : AppConfig.MAP_ZOOM;
 
     this.map = L.map('map', {
+      rotate: true,
+      touchRotate: true,
+      bearing: 0,
       center: center,
       zoom: zoom,
       minZoom: AppConfig.MAP_MIN_ZOOM,
@@ -67,6 +70,13 @@ const MapManager = {
       const c = this.map.getCenter();
       Storage.setMapState([c.lat, c.lng], this.map.getZoom());
     });
+    this.map.on('rotate', () => {
+      this.mapBearing = this.map.getBearing ? this.map.getBearing() : 0;
+      const needle = document.getElementById('map-bearing-needle');
+      if (needle) needle.style.transform = `rotate(${-this.mapBearing}deg)`;
+      const bearingVal = document.getElementById('map-bearing-value');
+      if (bearingVal) bearingVal.textContent = Math.round(((this.mapBearing % 360) + 360) % 360) + '°';
+    });
 
     // Add legend
     this.addLegend();
@@ -82,7 +92,7 @@ const MapManager = {
     });
 
     // Two-finger touch rotation (mobile)
-    this._initTouchRotation();
+    
   },
 
   // ============================================================
@@ -688,68 +698,25 @@ const MapManager = {
   // ============================================================
   // Map Rotation
   // ============================================================
-  rotateMap(deg) {
-    this.mapBearing = deg;
-    const container = this.map.getContainer();
-    container.style.transformOrigin = '50% 50%';
-    container.style.transform = `rotate(${deg}deg)`;
-    const controlContainer = container.querySelector('.leaflet-control-container');
-    if (controlContainer) {
-      controlContainer.style.transformOrigin = '50% 50%';
-      controlContainer.style.transform = `rotate(${-deg}deg)`;
-    }
-    // Update compass needle
-    const needle = document.getElementById('map-bearing-needle');
-    if (needle) needle.style.transform = `rotate(${deg}deg)`;
-    const bearingVal = document.getElementById('map-bearing-value');
-    if (bearingVal) bearingVal.textContent = Math.round(((deg % 360) + 360) % 360) + '°';
-  },
+  
 
   adjustBearing(delta) {
-    const newBearing = this.mapBearing + delta;
-    this.rotateMap(newBearing);
+    if (this.map.setBearing) {
+      this.map.setBearing(this.map.getBearing() + delta);
+    }
   },
 
   resetNorth() {
-    this.rotateMap(0);
-    App.showToast('🧭 Hướng Bắc được reset về 0°', 'success');
+    if (this.map.setBearing) {
+      this.map.setBearing(0);
+    }
+    App.showToast('Hướng Bắc đã được reset về 0°', 'success');
   },
 
   // ============================================================
   // Two-finger Touch Rotation (Mobile)
   // ============================================================
-  _initTouchRotation() {
-    const container = this.map.getContainer();
-    let startAngle = null;
-    let startBearing = 0;
-
-    const getTouchAngle = (t1, t2) => {
-      const dx = t2.clientX - t1.clientX;
-      const dy = t2.clientY - t1.clientY;
-      return Math.atan2(dy, dx) * 180 / Math.PI;
-    };
-
-    container.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 2) {
-        startAngle = getTouchAngle(e.touches[0], e.touches[1]);
-        startBearing = this.mapBearing;
-      }
-    }, { passive: true });
-
-    container.addEventListener('touchmove', (e) => {
-      if (e.touches.length === 2 && startAngle !== null) {
-        const currentAngle = getTouchAngle(e.touches[0], e.touches[1]);
-        const delta = currentAngle - startAngle;
-        this.rotateMap(startBearing + delta);
-      }
-    }, { passive: true });
-
-    container.addEventListener('touchend', (e) => {
-      if (e.touches.length < 2) {
-        startAngle = null;
-      }
-    }, { passive: true });
-  },
+  
 
   // ============================================================
   // Distance Measurement
