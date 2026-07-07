@@ -1,11 +1,4 @@
 
-window.addEventListener('error', function(e) {
-  alert("JS Error: " + e.message + " | file: " + e.filename + " | line: " + e.lineno);
-});
-window.addEventListener('unhandledrejection', function(e) {
-  alert("Promise Error: " + (e.reason ? e.reason.message || e.reason : 'Unknown'));
-});
-
 ﻿/**
  * BTS Progress Tracker - Main Application Controller
  */
