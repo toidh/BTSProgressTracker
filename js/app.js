@@ -1181,6 +1181,123 @@ const App = {
     this.renderCharts(sites);
   },
 
+  renderDelayedSites(sites) {
+// --- Delayed Sites Tracking ---
+    const delayedEl = document.getElementById('dash-delayed-sites');
+    if (delayedEl) {
+      const todayDate = new Date();
+      todayDate.setHours(0,0,0,0);
+      const delayedSites = sites.filter(s => {
+        const str = String(s['Ngày cập nhật'] || '');
+        const m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        const d = m ? new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])) : null;
+        if (!d) return false;
+        d.setHours(0,0,0,0);
+        const diff = Math.floor((todayDate - d) / 86400000);
+        if (diff > 2 && DataService.getSiteStatus(s) === 'in_progress') {
+            s._daysDelayed = diff;
+            return true;
+        }
+        return false;
+      });
+      
+      // Apply sorting
+      App.delayedSort = App.delayedSort || 'days';
+      delayedSites.sort((a, b) => {
+        if (App.delayedSort === 'partner') {
+          const pA = String(a['Đối tác'] || '').trim().toLowerCase();
+          const pB = String(b['Đối tác'] || '').trim().toLowerCase();
+          if (pA !== pB) return pA.localeCompare(pB, 'vi');
+        } else if (App.delayedSort === 'tktu') {
+          const pA = String(a['TKTU ONSITE'] || '').trim().toLowerCase();
+          const pB = String(b['TKTU ONSITE'] || '').trim().toLowerCase();
+          if (pA !== pB) return pA.localeCompare(pB, 'vi');
+        }
+        
+        // default/fallback: sort by days descending
+        const dA = a._daysDelayed || 0;
+        const dB = b._daysDelayed || 0;
+        if (dA !== dB) return dB - dA;
+        
+        const nameA = String(a['Site'] || '').trim();
+        const nameB = String(b['Site'] || '').trim();
+        return nameA.localeCompare(nameB);
+      });
+
+      if (delayedSites.length === 0) {
+        delayedEl.innerHTML = '<div class="dash-empty" style="color:var(--text-muted);font-style:italic">Không có trạm thi công kéo dài > 2 ngày</div>';
+      } else {
+        const d4g = delayedSites.filter(s => String(s['Phân loại']||'').trim() !== '5G Z').length;
+        const d5g = delayedSites.filter(s => String(s['Phân loại']||'').trim() !== '4G Z').length;
+        
+        const formatProgress = (p, type, cat) => {
+          if (cat === '5G Z' && type === '4G') return '';
+          if (cat === '4G Z' && type === '5G') return '';
+          const str = String(p || '').trim();
+          if (str === 'Hoàn thành') return '✅';
+          if (str === 'Đang thực hiện') return '🔄';
+          return '-';
+        };
+
+        const formatTime = (str) => {
+          const s = String(str || '');
+          const parts = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          if (parts) return `${parts[1]}/${parts[2]}/${parts[3]}`;
+          return s;
+        };
+
+        let html = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; margin-bottom:10px; gap:10px;">
+            <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">
+               Tổng số: <strong style="color:var(--color-red);font-size:14px" class="clickable-number" onclick="App.showSiteList('delayed_sites', 'Thi công kéo dài > 2 ngày')">${delayedSites.length}</strong> trạm | 
+               4G: <strong style="color:var(--color-red)">${d4g}</strong> | 
+               5G: <strong style="color:var(--color-red)">${d5g}</strong>
+            </div>
+            <div>
+              <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2)" onchange="App.delayedSort = this.value; App.renderDelayedSites(App.sites)">
+                <option value="days" ${App.delayedSort === 'days' ? 'selected' : ''}>Sort: Số ngày chưa HT</option>
+                <option value="partner" ${App.delayedSort === 'partner' ? 'selected' : ''}>Sort: Đối tác</option>
+                <option value="tktu" ${App.delayedSort === 'tktu' ? 'selected' : ''}>Sort: TKTU</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="dash-table">
+              <thead><tr><th>Mã trạm</th><th>Phân loại</th><th class="num">4G</th><th class="num">5G</th><th>Đối tác</th><th>TKTU</th><th>Ngày thực hiện</th><th>Nguyên nhân</th><th class="num">Chưa HT (ngày)</th></tr></thead>
+              <tbody>
+        `;
+        html += delayedSites.map(s => {
+          const status = DataService.getSiteStatus(s);
+          const color = DataService.getStatusColor(status, s);
+          return `<tr>
+            <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" style="color:${color}" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
+            <td>${s['Phân loại'] || '-'}</td>
+            <td class="num">${formatProgress(s['Tiến độ 4G'], '4G', s['Phân loại'])}</td>
+            <td class="num">${formatProgress(s['Tiến độ 5G'], '5G', s['Phân loại'])}</td>
+            <td>${s['Đối tác'] || '-'}</td>
+            <td>${s['TKTU ONSITE'] || '-'}</td>
+            <td>${formatTime(s['Ngày cập nhật'])}</td>
+            <td>${s['Nguyên nhân chưa hoàn thành'] || '-'}</td>
+            <td class="num" style="color:var(--color-red);font-weight:bold">${s._daysDelayed || '-'}</td>
+          </tr>`;
+        }).join('');
+        
+        html += `
+          <tr style="font-weight:700;border-top:2px solid var(--border-glass);background:rgba(255,255,255,0.02)">
+            <td>TỔNG</td>
+            <td style="color:var(--color-blue)">${delayedSites.length} trạm</td>
+            <td class="num" style="color:var(--color-green)">${d4g}</td>
+            <td class="num" style="color:var(--color-green)">${d5g}</td>
+            <td colspan="5"></td>
+          </tr>
+        `;
+        
+        html += `</tbody></table></div>`;
+        delayedEl.innerHTML = html;
+      }
+    }
+  },
+
   renderDailyPlan(sites) {
     const today = new Date();
     const todayDay = today.getDate();
@@ -1288,15 +1405,15 @@ const App = {
           5G: <strong style="color:var(--color-purple)">${plan5gDone}/${planTotal5g}</strong>
         </div>
         <div>
-          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2); margin-right:5px;" onchange="App.dailyPlanFilterTKTU = this.value; App.renderDashboard()">
+          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2); margin-right:5px;" onchange="App.dailyPlanFilterTKTU = this.value; App.renderDailyPlan(App.sites)">
             <option value="all">Filter: TKTU</option>
             ${Array.from(new Set(sites.filter(s => isToday(s['Kế hoạch ngày'])).map(s => String(s['TKTU ONSITE']||'').trim()).filter(Boolean))).map(t => `<option value="${t}" ${App.dailyPlanFilterTKTU === t ? 'selected' : ''}>${t}</option>`).join('')}
           </select>
-          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2); margin-right:5px;" onchange="App.dailyPlanFilterPartner = this.value; App.renderDashboard()">
+          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2); margin-right:5px;" onchange="App.dailyPlanFilterPartner = this.value; App.renderDailyPlan(App.sites)">
             <option value="all">Filter: Đối tác</option>
             ${Array.from(new Set(sites.filter(s => isToday(s['Kế hoạch ngày'])).map(s => String(s['Đối tác']||'').trim()).filter(Boolean))).map(p => `<option value="${p}" ${App.dailyPlanFilterPartner === p ? 'selected' : ''}>${p}</option>`).join('')}
           </select>
-          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2)" onchange="App.dailyPlanSort = this.value; App.renderDashboard()"><option value="tktu" ${App.dailyPlanSort === 'tktu' ? 'selected' : ''}>Sort: TKTU</option>
+          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2)" onchange="App.dailyPlanSort = this.value; App.renderDailyPlan(App.sites)"><option value="tktu" ${App.dailyPlanSort === 'tktu' ? 'selected' : ''}>Sort: TKTU</option>
             <option value="status" ${App.dailyPlanSort === 'status' ? 'selected' : ''}>Sort: Trạng thái</option>
             <option value="partner" ${App.dailyPlanSort === 'partner' ? 'selected' : ''}>Sort: Đối tác</option>
           </select>
@@ -1765,6 +1882,9 @@ const App = {
       .sort((a, b) => parseDate(b['Ngày cập nhật']) - parseDate(a['Ngày cập nhật']))
       .slice(0, 10);
 
+    
+    this.renderDelayedSites(sites);
+
     const el = document.getElementById('dash-recent-updates');
     if (updated.length === 0) {
       el.innerHTML = '<div class="dash-empty">Chưa có cập nhật nào</div>';
@@ -1854,7 +1974,7 @@ const App = {
         data: {
           labels: keys,
           datasets: [
-            { type: 'line', label: 'Tỷ lệ (%)', data: rates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { display: true, color: '#bfdbfe', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 12 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'line', label: 'Tỷ lệ (%)', data: rates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { display: true, color: '#bfdbfe', anchor: 'end', align: 'top', font: { weight: 'bold', size: 12 }, formatter: v => v > 0 ? v + '%' : '' } },
             { type: 'bar', label: 'Hoàn thành', data: comps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { display: true, color: '#fff', anchor: 'center', align: 'center', font: { weight: 'bold', size: 13 }, formatter: v => v || '' } },
             { type: 'bar', label: 'Khối lượng giao', data: totals, backgroundColor: 'rgba(239, 68, 68, 0.4)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { display: true, color: '#fca5a5', anchor: 'center', align: 'center', font: { weight: 'bold', size: 13 }, formatter: v => v || '' } }
           ]
@@ -1862,15 +1982,15 @@ const App = {
         plugins: dlPlugin,
         options: {
           responsive: true, maintainAspectRatio: false,
-          layout: { padding: { top: 18 } },
+          layout: { padding: { top: 60 } },
           plugins: {
             legend: { display: true, position: 'top', labels: { color: '#e2e8f0', usePointStyle: true, boxWidth: 8, font: { size: 11, weight: 'bold' } } },
             title: { display: true, text: titleText, color: '#f8fafc', font: { size: 14, weight: 'bold' } }
           },
           scales: {
             x: { ticks: { color: '#cbd5e1', font: { size: 11, weight: 'bold' }, maxRotation: 30 }, grid: { color: 'rgba(255,255,255,0.05)' } },
-            y: { type: 'linear', position: 'left', beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#94a3b8', font: { size: 11 } } },
-            y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { color: '#3b82f6', font: { size: 11, weight: 'bold' }, callback: v => v + '%' } }
+            y: { type: 'linear', position: 'left', beginAtZero: true, grace: '25%', grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#94a3b8', font: { size: 11 } } },
+            y1: { type: 'linear', position: 'right', beginAtZero: true, max: 115, grid: { drawOnChartArea: false }, ticks: { color: '#3b82f6', font: { size: 11, weight: 'bold' }, callback: v => v + '%' } }
           }
         }
       });
@@ -1953,6 +2073,25 @@ const App = {
     else if (filterId === 'completed') filtered = this.sites.filter(s => DataService.getSiteStatus(s) === 'completed');
     else if (filterId === 'in_progress') filtered = this.sites.filter(s => DataService.getSiteStatus(s) === 'in_progress');
     else if (filterId === 'pending') filtered = this.sites.filter(s => { const st = DataService.getSiteStatus(s); return st !== 'completed' && st !== 'in_progress'; });
+
+      else if (filterId === 'delayed_sites') {
+        const parseDate = str => { const m = String(str || '').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); return m ? new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])) : null; };
+        const todayDate = new Date();
+        todayDate.setHours(0,0,0,0);
+        filtered = this.sites.filter(s => {
+          if (DataService.getSiteStatus(s) !== 'in_progress') return false;
+          const d = parseDate(s['Ngày cập nhật']);
+          if (!d) return false;
+          d.setHours(0,0,0,0);
+          const diff = Math.floor((todayDate - d) / 86400000);
+          if (diff > 2) {
+              s._daysDelayed = diff;
+              return true;
+          }
+          return false;
+        });
+      }
+
     else if (filterId.startsWith('daily_plan_')) {
       const planSites = this.sites.filter(s => DataService.isDailyPlan(s));
       if (filterId === 'daily_plan_all') filtered = planSites;
@@ -2101,6 +2240,7 @@ const App = {
 
     document.getElementById('list-modal').classList.add('visible');
   },
+  
   closeListModal() {
     document.getElementById('list-modal').classList.remove('visible');
   },
@@ -2118,7 +2258,7 @@ const App = {
     }
   },
 
-    showSiteDetails(siteName) {
+  showSiteDetails(siteName) {
     const site = App.sites.find(s => s['Site'] === siteName);
     if (!site) return;
 
@@ -2155,16 +2295,46 @@ const App = {
   // ============================================================
   // Exports
   // ============================================================
-    cleanSiteForExport(site, isCheckinMode = false) {
-    const ordered = {};
+    cleanSiteForExport(site, isCheckinMode = false, isDelayedMode = false) {
+    
+      const ordered = {};
+      
+      let p4g = site['Tiến độ 4G'] || '';
+      let p5g = site['Tiến độ 5G'] || '';
+      cat = String(site['Phân loại'] || '').trim();
+      if (cat === '4G Z') p5g = '';
+      if (cat === '5G Z') p4g = '';
+      
+      if (isDelayedMode) {
+        ordered['Trạm'] = site['Site'] || '';
+        ordered['Phân loại'] = site['Phân loại'] || '';
+        ordered['4G'] = p4g;
+        ordered['5G'] = p5g;
+        ordered['Đối tác'] = site['Đối tác'] || '';
+        ordered['TKTU'] = site['TKTU ONSITE'] || '';
+        
+        let ghiChu = '';
+        for (const k in site) {
+          if (k.trim() === 'Ghi chú (TKTU ONSITE)') {
+            ghiChu = site[k] || '';
+            break;
+          }
+        }
+        ordered['Ghi chú'] = ghiChu;
+        ordered['Ngày thực hiện'] = site['Ngày cập nhật'] || '';
+        ordered['Nguyên nhân'] = site['Nguyên nhân chưa hoàn thành'] || '';
+        ordered['Số ngày chưa hoàn thành'] = site._daysDelayed || '';
+        return ordered;
+      }
+
     ordered['Site'] = site['Site'] || '';
     ordered['Phân loại'] = site['Phân loại'] || '';
     ordered['Huyện'] = site['Huyện'] || '';
     ordered['Phương án Swap'] = site['Phương án Swap'] || '';
     
-    let p4g = site['Tiến độ 4G'] || '';
-    let p5g = site['Tiến độ 5G'] || '';
-    const cat = String(site['Phân loại'] || '').trim();
+    p4g = site['Tiến độ 4G'] || '';
+    p5g = site['Tiến độ 5G'] || '';
+    cat = String(site['Phân loại'] || '').trim();
     if (cat === '4G Z') p5g = '';
     if (cat === '5G Z') p4g = '';
     
@@ -2404,8 +2574,8 @@ const App = {
         const baseOpts = { animation: false, responsive: true, maintainAspectRatio: false };
         const comboScales = {
           x: { ticks: { font: { size: 12, weight: 'bold' }, color: '#475569' }, grid: { color: '#f1f5f9' } },
-          y: { type: 'linear', position: 'left', beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#64748b' } },
-          y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { font: { size: 11, weight: 'bold' }, color: '#3b82f6', callback: v => v + '%' } }
+          y: { type: 'linear', position: 'left', beginAtZero: true, grace: '25%', grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#64748b' } },
+          y1: { type: 'linear', position: 'right', beginAtZero: true, max: 115, grid: { drawOnChartArea: false }, ticks: { font: { size: 11, weight: 'bold' }, color: '#3b82f6', callback: v => v + '%' } }
         };
         const comboLegend = { display: true, position: 'top', labels: { usePointStyle: true, font: { size: 12, weight: 'bold' }, color: '#334155' } };
 
@@ -2422,11 +2592,11 @@ const App = {
         if (partCtx) new Chart(partCtx, {
           type: 'bar', plugins: DL,
           data: { labels: pNames, datasets: [
-            { type: 'line', label: 'Tỷ lệ (%)', data: pRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'line', label: 'Tỷ lệ (%)', data: pRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'end', align: 'top', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
             { type: 'bar', label: 'Hoàn thành', data: pComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
             { type: 'bar', label: 'Khối lượng giao', data: pTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
           ]},
-          options: { ...baseOpts, layout: { padding: { top: 20 } }, plugins: { legend: comboLegend }, scales: comboScales }
+          options: { ...baseOpts, layout: { padding: { top: 60 } }, plugins: { legend: comboLegend }, scales: comboScales }
         });
 
         // 3. Daily Line (blue with shadow)
@@ -2436,7 +2606,7 @@ const App = {
           data: { labels: dailyLabels, datasets: [
             { label: 'Hoàn thành', data: dailyVals, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', fill: true, tension: 0.3, borderWidth: 3, pointRadius: 5, datalabels: { color: '#1e3a8a', anchor: 'end', align: 'top', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v : '' } }
           ]},
-          options: { ...baseOpts, layout: { padding: { top: 25 } },
+          options: { ...baseOpts, layout: { padding: { top: 60 } },
             plugins: { legend: { display: false } },
             scales: { x: { ticks: { font: { size: 11, weight: 'bold' }, maxRotation: 45, color: '#475569' }, grid: { color: '#f1f5f9' } }, y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 } } } }
           }
@@ -2447,11 +2617,11 @@ const App = {
         if (classCtx) new Chart(classCtx, {
           type: 'bar', plugins: DL,
           data: { labels: cNames, datasets: [
-            { type: 'line', label: 'Tỷ lệ (%)', data: cRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'line', label: 'Tỷ lệ (%)', data: cRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'end', align: 'top', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
             { type: 'bar', label: 'Hoàn thành', data: cComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
             { type: 'bar', label: 'Khối lượng giao', data: cTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
           ]},
-          options: { ...baseOpts, layout: { padding: { top: 20 } }, plugins: { legend: comboLegend }, scales: comboScales }
+          options: { ...baseOpts, layout: { padding: { top: 60 } }, plugins: { legend: comboLegend }, scales: comboScales }
         });
 
         // 5. Plan Combo
@@ -2459,11 +2629,11 @@ const App = {
         if (planCtx && dpNames.length > 0) new Chart(planCtx, {
           type: 'bar', plugins: DL,
           data: { labels: dpNames, datasets: [
-            { type: 'line', label: 'Tỷ lệ (%)', data: dpRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'line', label: 'Tỷ lệ (%)', data: dpRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'end', align: 'top', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
             { type: 'bar', label: 'Hoàn thành', data: dpComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
             { type: 'bar', label: 'Kế hoạch', data: dpTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
           ]},
-          options: { ...baseOpts, layout: { padding: { top: 20 } }, plugins: { legend: comboLegend }, scales: comboScales }
+          options: { ...baseOpts, layout: { padding: { top: 60 } }, plugins: { legend: comboLegend }, scales: comboScales }
         });
 
       } catch(e) { console.error('[PNG Chart Error]', e); }
@@ -2534,7 +2704,10 @@ const App = {
     const exportData = this.currentListData;
 
     const isCheckinMode = this.currentListFilter && this.currentListFilter.includes('checkin');
-    const cleanData = exportData.map(s => this.cleanSiteForExport(s, isCheckinMode));
+    
+      const isDelayedMode = this.currentListFilter === 'delayed_sites';
+      const cleanData = exportData.map(s => this.cleanSiteForExport(s, isCheckinMode, isDelayedMode));
+
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(cleanData);

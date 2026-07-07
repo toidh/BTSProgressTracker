@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=243">
+  <link rel="stylesheet" href="css/style.css?v=268">
   <style>
     /* Critical inline fallback - ensures dark theme even if CSS file fails */
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -487,9 +487,15 @@
         <div id="dash-plan-doitac"></div>
       </div>
 
-      <!-- Recent Updates -->
-      <div class="dash-section">
-        <div class="dash-section-title">🕐 Cập nhật gần đây</div>
+        <!-- Delayed Sites Tracking -->
+        <div class="dash-section">
+          <div class="dash-section-title">⏱️ Theo dõi trạm thực hiện > 2 ngày</div>
+          <div id="dash-delayed-sites"></div>
+        </div>
+
+        <!-- Recent Updates -->
+        <div class="dash-section">
+          <div class="dash-section-title">🔄 Cập nhật gần đây</div>
         <div id="dash-recent-updates"></div>
       </div>
 
@@ -531,7 +537,7 @@
       </div>
       <div class="modal-body" style="padding: 10px;">
         <div style="margin-bottom: 15px; display:flex; gap: 10px;">
-          <button class="btn btn-primary export-btn" onclick="App.exportDetailExcel()" style="background:var(--color-green)">Xuất Excel</button>
+          
         </div>
         <div class="site-detail-table-wrapper" style="max-height: 60vh; overflow-y: auto;">
           <table class="dash-table" id="detail-modal-content">
@@ -630,14 +636,14 @@
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
   <script crossorigin="anonymous" src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="./js/config.js?v=243"></script>
-  <script src="./js/storage.js?v=243"></script>
-  <script src="./js/data.js?v=243"></script>
-  <script src="./js/auth.js?v=243"></script>
-  <script src="./js/compass.js?v=243"></script>
-  <script src="./js/ai-assistant.js?v=243"></script>
-  <script src="./js/map.js?v=243"></script>
-  <script src="./js/app.js?v=243"></script>
+  <script src="./js/config.js?v=268"></script>
+  <script src="./js/storage.js?v=268"></script>
+  <script src="./js/data.js?v=268"></script>
+  <script src="./js/auth.js?v=268"></script>
+  <script src="./js/compass.js?v=268"></script>
+  <script src="./js/ai-assistant.js?v=268"></script>
+  <script src="./js/map.js?v=268"></script>
+  <script src="./js/app.js?v=268"></script>
 
   
 
