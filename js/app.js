@@ -1430,7 +1430,7 @@ const App = {
             <td style="color:var(--color-blue)">${delayedSites.length} trạm</td>
             <td class="num" style="color:var(--color-green)">${d4g}</td>
             <td class="num" style="color:var(--color-green)">${d5g}</td>
-            <td colspan="5"></td>
+            <td colspan="4"></td>
           </tr>
         `;
         
@@ -1521,7 +1521,7 @@ const App = {
           </div>
           <div class="table-responsive">
             <table class="dash-table">
-              <thead><tr><th>Mã trạm</th><th>Phân loại</th><th class="num">4G</th><th class="num">5G</th><th>Đối tác</th><th>TKTU</th><th>Ngày đăng ký</th><th>Nguyên nhân</th><th class="num">Chưa HT (ngày)</th></tr></thead>
+              <thead><tr><th>Mã trạm</th><th>Phân loại</th><th class="num">4G</th><th class="num">5G</th><th>Đối tác</th><th>TKTU</th><th>Ngày đăng ký</th><th class="num">Chưa HT (ngày)</th></tr></thead>
               <tbody>
         `;
         html += delayedSites.map(s => {
@@ -1535,7 +1535,6 @@ const App = {
             <td>${s['Đối tác'] || '-'}</td>
             <td>${s['TKTU ONSITE'] || '-'}</td>
             <td>${formatTime(s['Ngày đăng ký'])}</td>
-            <td class="wrap-text">${s['Nguyên nhân chưa hoàn thành'] || '-'}</td>
             <td class="num" style="color:var(--color-red);font-weight:bold">${s._daysDelayedDk || '-'}</td>
           </tr>`;
         }).join('');
@@ -1546,7 +1545,7 @@ const App = {
             <td style="color:var(--color-blue)">${delayedSites.length} trạm</td>
             <td class="num" style="color:var(--color-green)">${d4g}</td>
             <td class="num" style="color:var(--color-green)">${d5g}</td>
-            <td colspan="5"></td>
+            <td colspan="4"></td>
           </tr>
         `;
         
@@ -2304,6 +2303,7 @@ const App = {
       if (window.chartDailyLineInstance) { window.chartDailyLineInstance.destroy(); window.chartDailyLineInstance = null; }
       if (window.chartDailyInstance) { window.chartDailyInstance.destroy(); window.chartDailyInstance = null; }
       const dlPlugin = window.ChartDataLabels ? [window.ChartDataLabels] : [];
+      document.getElementById('chart-daily-wrapper').style.minWidth = Math.max(100, labels.length * 4) + '%';
       window.chartDailyInstance = new Chart(ctxDaily, {
         type: 'line',
         data: { labels, datasets: [{ label: 'Hoàn thành', data: vals, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', fill: true, tension: 0.3, pointRadius: 5, borderWidth: 3, datalabels: { display: true, color: '#93c5fd', anchor: 'end', align: 'top', font: { weight: 'bold', size: 12 }, formatter: v => v > 0 ? v : '' } }] },
@@ -2774,14 +2774,22 @@ const App = {
     const pastDays = dailySorted.filter(i => i.raw.getTime() < todayBegin);
     const bestDay = pastDays.length ? pastDays.reduce((b,i) => i.count > b.count ? i : b, pastDays[0]) : null;
     
-    // Average of ALL past days
-    const totalPastCompleted = pastDays.reduce((sum, i) => sum + i.count, 0);
-    const avgPerDay = pastDays.length ? (totalPastCompleted / pastDays.length).toFixed(1) : 0;
+    // Average of LAST 7 days (Base: exclude today)
+    let last7 = pastDays.slice(-7);
     
-    // Estimated days: Average of LAST 7 past days
-    const last7 = pastDays.slice(-7);
+    const todayData = dailySorted.find(i => i.raw.getTime() >= todayBegin);
+    const todayCount = todayData ? todayData.count : 0;
+    
+    // If today's progress > the oldest day in the window, shift window to include today
+    if (last7.length > 0 && todayCount > last7[0].count) {
+      last7 = [...pastDays.slice(-6), { count: todayCount }];
+    }
+    
     const totalLast7 = last7.reduce((sum, i) => sum + i.count, 0);
     const avgLast7 = last7.length ? (totalLast7 / last7.length).toFixed(1) : 0;
+    
+    // We use the 7-day average for both the displayed metric and the estimation
+    let avgPerDay = avgLast7;
     const remaining = total - completed;
     const daysToFinish = (avgLast7 > 0 && remaining > 0) ? Math.ceil(remaining / avgLast7) : null;
 
