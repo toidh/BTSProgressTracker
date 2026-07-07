@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=233">
+  <link rel="stylesheet" href="css/style.css?v=236">
   <style>
     /* Critical inline fallback - ensures dark theme even if CSS file fails */
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -402,21 +402,27 @@
         <!-- Chart Section -->
         <!-- Row 1: Tổng quan & Huyện -->
         <div class="dash-section" style="display:flex;gap:15px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:300px;height:300px;">
+          <div style="flex:1;min-width:300px;height:320px;position:relative;">
             <canvas id="chart-overall"></canvas>
           </div>
-          <div style="flex:1;min-width:300px;height:300px;">
-            <canvas id="chart-huyen"></canvas>
+          <div style="flex:1;min-width:300px;height:320px;overflow-x:auto;">
+            <div style="min-width:700px;height:100%;position:relative;">
+              <canvas id="chart-huyen"></canvas>
+            </div>
           </div>
         </div>
         
-        <!-- Row 2: Đối tác, Phân loại -->
+                <!-- Row 2: Đối tác, Phân loại -->
         <div class="dash-section" style="display:flex;gap:15px;flex-wrap:wrap;margin-top:15px;">
-          <div style="flex:1;min-width:300px;height:350px;">
-            <canvas id="chart-partners"></canvas>
+          <div style="flex:1;min-width:300px;height:350px;overflow-x:auto;">
+            <div style="min-width:600px;height:100%;position:relative;">
+              <canvas id="chart-partners"></canvas>
+            </div>
           </div>
-          <div style="flex:1;min-width:300px;height:350px;">
-            <canvas id="chart-class"></canvas>
+          <div style="flex:1;min-width:300px;height:350px;overflow-x:auto;">
+            <div style="min-width:450px;height:100%;position:relative;">
+              <canvas id="chart-class"></canvas>
+            </div>
           </div>
         </div>
 
@@ -604,14 +610,14 @@
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
   <script crossorigin="anonymous" src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="./js/config.js?v=233"></script>
-  <script src="./js/storage.js?v=233"></script>
-  <script src="./js/data.js?v=233"></script>
-  <script src="./js/auth.js?v=233"></script>
-  <script src="./js/compass.js?v=233"></script>
-  <script src="./js/ai-assistant.js?v=233"></script>
-  <script src="./js/map.js?v=233"></script>
-  <script src="./js/app.js?v=233"></script>
+  <script src="./js/config.js?v=236"></script>
+  <script src="./js/storage.js?v=236"></script>
+  <script src="./js/data.js?v=236"></script>
+  <script src="./js/auth.js?v=236"></script>
+  <script src="./js/compass.js?v=236"></script>
+  <script src="./js/ai-assistant.js?v=236"></script>
+  <script src="./js/map.js?v=236"></script>
+  <script src="./js/app.js?v=236"></script>
 
   
 
