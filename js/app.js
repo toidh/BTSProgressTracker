@@ -1176,11 +1176,153 @@ const App = {
     // === Plan by Đối tác ===
     this.renderPlanByGroup(sites, "Đối tác", "dash-plan-doitac");
 
+    this.renderSummaryDelayed(sites);
+
     // === Recent Updates ===
     this.renderRecentUpdates(sites);
     this.renderCharts(sites);
   },
 
+  renderSummaryDelayed(sites) {
+    const el = document.getElementById('dash-summary-delayed');
+    if (!el) return;
+    
+    const todayDate = new Date();
+    todayDate.setHours(0,0,0,0);
+    
+    const partners = {};
+    
+    sites.forEach(s => {
+      const p = String(s['Đối tác'] || 'Khác').trim();
+      if (!partners[p]) partners[p] = { dk: 0, exe: 0 };
+      
+      if (DataService.getSiteStatus(s) !== 'completed') {
+        const strDk = String(s['Ngày đăng ký'] || '');
+        const mDk = strDk.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (mDk) {
+          const dDk = new Date(parseInt(mDk[3]), parseInt(mDk[2]) - 1, parseInt(mDk[1]));
+          dDk.setHours(0,0,0,0);
+          if (Math.floor((todayDate - dDk) / 86400000) > 2) partners[p].dk++;
+        }
+      }
+      
+      if (DataService.getSiteStatus(s) === 'in_progress') {
+        const strExe = String(s['Ngày cập nhật'] || '');
+        const mExe = strExe.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (mExe) {
+          const dExe = new Date(parseInt(mExe[3]), parseInt(mExe[2]) - 1, parseInt(mExe[1]));
+          dExe.setHours(0,0,0,0);
+          if (Math.floor((todayDate - dExe) / 86400000) > 2) partners[p].exe++;
+        }
+      }
+    });
+    
+    const pKeys = Object.keys(partners).sort((a,b) => a.localeCompare(b, 'vi'));
+    let totalDk = 0;
+    let totalExe = 0;
+    
+    let html = `
+      <div class="dash-charts-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; align-items: stretch;">
+        <div class="dash-chart-box" style="height:auto; min-height:100%; display:block; padding:0; align-items:flex-start; justify-content:flex-start;">
+          <div class="table-responsive" style="height:100%; margin:0; overflow-y:auto; padding: 20px;">
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th style="font-size:12px; font-weight:700">Đối tác</th>
+                  <th class="num wrap-text" style="font-size:12px; font-weight:700; white-space:normal">Số trạm đk > 2 ngày chưa hoàn thành</th>
+                  <th class="num wrap-text" style="font-size:12px; font-weight:700; white-space:normal">Số trạm đang thực hiện chưa swap/ vướng / lỗi</th>
+                </tr>
+              </thead>
+              <tbody>
+    `;
+    
+    pKeys.forEach(p => {
+      if (partners[p].dk === 0 && partners[p].exe === 0) return;
+      totalDk += partners[p].dk;
+      totalExe += partners[p].exe;
+      html += `
+        <tr>
+          <td>${p}</td>
+          <td class="num" style="color:var(--color-blue);font-weight:bold">${partners[p].dk > 0 ? partners[p].dk : ''}</td>
+          <td class="num" style="color:var(--color-red);font-weight:bold">${partners[p].exe > 0 ? partners[p].exe : ''}</td>
+        </tr>
+      `;
+    });
+    
+    if (totalDk === 0 && totalExe === 0) {
+      el.innerHTML = '<div class="dash-empty" style="color:var(--text-muted);font-style:italic">Chưa có dữ liệu</div>';
+      return;
+    }
+    
+    html += `
+              <tr style="font-weight:700;border-top:2px solid var(--border-glass);background:rgba(255,255,255,0.02)">
+                <td>Tổng</td>
+                <td class="num" style="color:var(--color-blue)">${totalDk > 0 ? totalDk : ''}</td>
+                <td class="num" style="color:var(--color-red)">${totalExe > 0 ? totalExe : ''}</td>
+              </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="dash-chart-box" style="height:auto; min-height:100%; display:block; padding:20px;">
+          <canvas id="chart-summary-delayed-canvas"></canvas>
+        </div>
+      </div>
+    `;
+    
+    el.innerHTML = html;
+
+    const ctx = document.getElementById('chart-summary-delayed-canvas');
+    if (ctx) {
+      if (window.chartSummaryDelayedInstance) window.chartSummaryDelayedInstance.destroy();
+      
+      const labels = [];
+      const dataDk = [];
+      const dataExe = [];
+      
+      pKeys.forEach(p => {
+        if (partners[p].dk > 0 || partners[p].exe > 0) {
+          labels.push(p);
+          dataDk.push(partners[p].dk);
+          dataExe.push(partners[p].exe);
+        }
+      });
+      
+      const dlPlugin = window.ChartDataLabels ? [window.ChartDataLabels] : [];
+      window.chartSummaryDelayedInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'ĐK > 2 ngày',
+              data: dataDk,
+              backgroundColor: '#3b82f6',
+              datalabels: { display: true, color: '#fff', font: { weight: 'bold', size: 11 }, formatter: v => v || '' }
+            },
+            {
+              label: 'Đang TH > 2 ngày',
+              data: dataExe,
+              backgroundColor: '#ef4444',
+              datalabels: { display: true, color: '#fff', font: { weight: 'bold', size: 11 }, formatter: v => v || '' }
+            }
+          ]
+        },
+        plugins: dlPlugin,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: '#e2e8f0', usePointStyle: true, font: { size: 11 } } }
+          },
+          scales: {
+            x: { ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#94a3b8', font: { size: 11 } } }
+          }
+        }
+      });
+    }
+  },
   renderDelayedSites(sites) {
 // --- Delayed Sites Tracking ---
     const delayedEl = document.getElementById('dash-delayed-sites');
