@@ -173,9 +173,7 @@ const App = {
     document.getElementById('compass-btn')?.addEventListener('click', () => {
       if (window.CompassAR && this.currentSiteSectors) {
         window.CompassAR.openCompass(this.currentSiteSectors, this.currentSite);
-      } else {
-        this.showToast('La bàn chưa sẵn sàng', 'error');
-      }
+      } 
     });
 
     document.getElementById('comment-submit')?.addEventListener('click', () => this.submitComment());
@@ -1280,8 +1278,8 @@ const App = {
     const calcPct = (v) => tLen > 0 ? ((v / tLen) * 100).toFixed(2) : '0.00';
     
     el.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; gap:10px;">
-        <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;flex:1;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; margin-bottom:10px; gap:10px;">
+        <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;flex:1 1 100%;min-width:280px;">
           📋 Kế hoạch: <strong style="color:var(--color-blue)" class="clickable-number" onclick="App.showSiteList('daily_plan_all', 'Tất cả (Kế hoạch ngày)')">${tLen}</strong> trạm |
           Hoàn thành: <strong style="color:var(--color-green)" class="clickable-number" onclick="App.showSiteList('daily_plan_completed', 'Hoàn thành (Kế hoạch ngày)')">${planCompleted} (${calcPct(planCompleted)}%)</strong> |
           Đang thực hiện: <strong style="color:var(--color-red)" class="clickable-number" onclick="App.showSiteList('daily_plan_in_progress', 'Đang thực hiện (Kế hoạch ngày)')">${planInProgress} (${calcPct(planInProgress)}%)</strong> |

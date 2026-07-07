@@ -8,11 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>RF Mate</title>
-  <script>
-    window.onerror = function(message, source, lineno, colno, error) {
-      alert("JS Error: " + message + " at " + source + ":" + lineno + ":" + colno);
-    };
-  </script>
+  
   <!-- <link rel="manifest" href="/manifest.json"> -->
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -20,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=240">
+  <link rel="stylesheet" href="css/style.css?v=243">
   <style>
     /* Critical inline fallback - ensures dark theme even if CSS file fails */
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -31,6 +27,16 @@
     .modal-overlay{display:none}.modal-overlay.visible{display:flex}
     #loading-overlay{display:none}#loading-overlay.visible{display:flex}
   </style>
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-CR8YTRDME0');
+    </script>
 </head>
 <body>
 
@@ -392,9 +398,9 @@
   <div id="dashboard-overlay" class="dashboard-overlay">
     <div class="dashboard-container">
       <div class="dashboard-header">
-        <h2 style="display:flex;align-items:center;gap:10px;font-size:16px;">📊 Dashboard Tiến độ</h2>
+        <h2 style="display:flex;align-items:center;gap:5px;font-size:15px;white-space:nowrap;">📊 Dashboard Tiến độ</h2>
         <div style="display:flex; align-items:center; gap:10px;">
-          <button id="dashboard-export-btn" class="btn btn-primary" style="display:none; background:var(--color-primary);" onclick="App.exportDashboardPDF()">Xuất Ảnh PNG</button>
+          <button id="dashboard-export-btn" class="btn btn-primary" style="display:none; background:var(--color-primary); font-size:12px; padding:4px 8px; white-space:nowrap;" onclick="App.exportDashboardPDF()">Xuất Ảnh PNG</button>
           <button id="dashboard-close-btn" class="modal-close-btn">✕</button>
         </div>
       </div>
@@ -624,14 +630,14 @@
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
   <script crossorigin="anonymous" src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="./js/config.js?v=240"></script>
-  <script src="./js/storage.js?v=240"></script>
-  <script src="./js/data.js?v=240"></script>
-  <script src="./js/auth.js?v=240"></script>
-  <script src="./js/compass.js?v=240"></script>
-  <script src="./js/ai-assistant.js?v=240"></script>
-  <script src="./js/map.js?v=240"></script>
-  <script src="./js/app.js?v=240"></script>
+  <script src="./js/config.js?v=243"></script>
+  <script src="./js/storage.js?v=243"></script>
+  <script src="./js/data.js?v=243"></script>
+  <script src="./js/auth.js?v=243"></script>
+  <script src="./js/compass.js?v=243"></script>
+  <script src="./js/ai-assistant.js?v=243"></script>
+  <script src="./js/map.js?v=243"></script>
+  <script src="./js/app.js?v=243"></script>
 
   
 
