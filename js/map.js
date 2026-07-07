@@ -693,6 +693,11 @@ const MapManager = {
     const container = this.map.getContainer();
     container.style.transformOrigin = '50% 50%';
     container.style.transform = `rotate(${deg}deg)`;
+    const controlContainer = container.querySelector('.leaflet-control-container');
+    if (controlContainer) {
+      controlContainer.style.transformOrigin = '50% 50%';
+      controlContainer.style.transform = `rotate(${-deg}deg)`;
+    }
     // Update compass needle
     const needle = document.getElementById('map-bearing-needle');
     if (needle) needle.style.transform = `rotate(${deg}deg)`;
