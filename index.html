@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -8,14 +8,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>RF Mate</title>
-  <link rel="manifest" href="manifest.json">
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      alert("JS Error: " + message + " at " + source + ":" + lineno + ":" + colno);
+    };
+  </script>
+  <!-- <link rel="manifest" href="/manifest.json"> -->
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=140">
+  <link rel="stylesheet" href="css/style.css?v=232">
   <style>
     /* Critical inline fallback - ensures dark theme even if CSS file fails */
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -110,6 +115,9 @@
 
     <!-- Map Container -->
     <div id="map"></div>
+    
+    <!-- Measure distance display -->
+    <div id="measure-distance-display" style="display:none;"></div>
 
     <!-- Map Filter Bar -->
     <div class="map-filter-bar" id="map-filter-bar">
@@ -137,6 +145,10 @@
       </button>
       <button class="btn-icon" id="dashboard-btn" title="Dashboard">
         📊
+      </button>
+      <!-- Measure Distance -->
+      <button class="btn-icon" id="measure-btn" title="Đo khoảng cách" onclick="MapManager.toggleMeasure()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20"/><path d="M2 12l4-4"/><path d="M2 12l4 4"/><path d="M22 12l-4-4"/><path d="M22 12l-4 4"/><line x1="8" y1="9" x2="8" y2="15"/><line x1="12" y1="7" x2="12" y2="17"/><line x1="16" y1="9" x2="16" y2="15"/></svg>
       </button>
       <button class="btn-icon" id="gps-btn" title="Vị trí của tôi">
         📍
@@ -369,7 +381,7 @@
       <div class="dashboard-header">
         <h2 style="display:flex;align-items:center;gap:10px;font-size:16px;">📊 Dashboard Tiến độ</h2>
         <div style="display:flex; align-items:center; gap:10px;">
-          <button id="dashboard-export-btn" class="btn btn-primary" style="display:none; background:var(--color-primary);" onclick="App.exportDashboardPDF()">Xuất PDF</button>
+          <button id="dashboard-export-btn" class="btn btn-primary" style="display:none; background:var(--color-primary);" onclick="App.exportDashboardPDF()">Xuất Ảnh PNG</button>
           <button id="dashboard-close-btn" class="modal-close-btn">✕</button>
         </div>
       </div>
@@ -388,23 +400,41 @@
         </div>
         
         <!-- Chart Section -->
-        <!-- Row 1: Tổng quan & Phân loại -->
+        <!-- Row 1: Tổng quan & Huyện -->
         <div class="dash-section" style="display:flex;gap:15px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:300px;height:250px;">
+          <div style="flex:1;min-width:300px;height:300px;">
             <canvas id="chart-overall"></canvas>
           </div>
-          <div style="flex:1;min-width:300px;height:250px;">
-            <canvas id="chart-categories"></canvas>
+          <div style="flex:1;min-width:300px;height:300px;">
+            <canvas id="chart-huyen"></canvas>
           </div>
         </div>
         
-        <!-- Row 2: Đối tác & Huyện -->
+        <!-- Row 2: Đối tác, Phân loại -->
         <div class="dash-section" style="display:flex;gap:15px;flex-wrap:wrap;margin-top:15px;">
-          <div style="flex:1;min-width:300px;height:400px;">
+          <div style="flex:1;min-width:300px;height:350px;">
             <canvas id="chart-partners"></canvas>
           </div>
-          <div style="flex:1;min-width:300px;height:400px;">
-            <canvas id="chart-huyen"></canvas>
+          <div style="flex:1;min-width:300px;height:350px;">
+            <canvas id="chart-class"></canvas>
+          </div>
+        </div>
+
+        <!-- Row 3: Biểu đồ đường hoàn thành theo ngày -->
+        <div class="dash-section" style="margin-top:15px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-size:14px;font-weight:600;border-left:3px solid var(--color-green);padding-left:8px;color:#fff;">
+              Số trạm hoàn thành theo ngày
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:11px; color:#cbd5e1;">Zoom:</span>
+              <input type="range" id="chart-daily-zoom" min="100" max="400" value="100" style="width:80px; accent-color:#10b981;" oninput="document.getElementById('chart-daily-wrapper').style.minWidth = this.value + '%'">
+            </div>
+          </div>
+          <div style="width:100%; overflow-x:auto; overflow-y:hidden;">
+            <div id="chart-daily-wrapper" style="min-width:100%; height:260px;">
+              <canvas id="chart-daily-line"></canvas>
+            </div>
           </div>
         </div>
 
@@ -566,19 +596,22 @@
   <!-- ============================================================
        SCRIPTS
        ============================================================ -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-  <script src="./js/config.js?v=140"></script>
-  <script src="./js/storage.js?v=140"></script>
-  <script src="./js/data.js?v=140"></script>
-  <script src="./js/auth.js?v=140"></script>
-  <script src="./js/compass.js?v=140"></script>
-  <script src="./js/ai-assistant.js?v=140"></script>
-  <script src="./js/map.js?v=140"></script>
-  <script src="./js/app.js?v=140"></script>
+  <script crossorigin="anonymous" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script crossorigin="anonymous" src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <script crossorigin="anonymous" src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+  <script crossorigin="anonymous" src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="./js/config.js?v=232"></script>
+  <script src="./js/storage.js?v=232"></script>
+  <script src="./js/data.js?v=232"></script>
+  <script src="./js/auth.js?v=232"></script>
+  <script src="./js/compass.js?v=232"></script>
+  <script src="./js/ai-assistant.js?v=232"></script>
+  <script src="./js/map.js?v=232"></script>
+  <script src="./js/app.js?v=232"></script>
 
   
 

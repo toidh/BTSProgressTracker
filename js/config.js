@@ -10,7 +10,7 @@ const AppConfig = {
 
   // App info
   APP_NAME: 'RF Mate',
-  APP_VERSION: '2.1.1',
+  APP_VERSION: '2.1.2',
 
   // Map defaults (centered on Bạc Liêu province)
   MAP_CENTER: [9.17684, 105.15691],

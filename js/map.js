@@ -15,6 +15,11 @@ const MapManager = {
   streetLayer: null,
   satelliteLayer: null,
   watchId: null,
+  mapBearing: 0,
+  measureMode: false,
+  measurePoints: [],
+  measureLayer: null,
+  measureMarkers: [],
 
   // ============================================================
   // Initialize Map
@@ -65,6 +70,19 @@ const MapManager = {
 
     // Add legend
     this.addLegend();
+
+    // Measure layer
+    this.measureLayer = L.layerGroup().addTo(this.map);
+
+    // Map click for measure
+    this.map.on('click', (e) => {
+      if (this.measureMode) {
+        this._addMeasurePoint(e.latlng);
+      }
+    });
+
+    // Two-finger touch rotation (mobile)
+    this._initTouchRotation();
   },
 
   // ============================================================
@@ -665,5 +683,159 @@ const MapManager = {
       this.map.remove();
       this.map = null;
     }
+  },
+
+  // ============================================================
+  // Map Rotation
+  // ============================================================
+  rotateMap(deg) {
+    this.mapBearing = deg;
+    const container = this.map.getContainer();
+    container.style.transformOrigin = '50% 50%';
+    container.style.transform = `rotate(${deg}deg)`;
+    // Update compass needle
+    const needle = document.getElementById('map-bearing-needle');
+    if (needle) needle.style.transform = `rotate(${deg}deg)`;
+    const bearingVal = document.getElementById('map-bearing-value');
+    if (bearingVal) bearingVal.textContent = Math.round(((deg % 360) + 360) % 360) + '°';
+  },
+
+  adjustBearing(delta) {
+    const newBearing = this.mapBearing + delta;
+    this.rotateMap(newBearing);
+  },
+
+  resetNorth() {
+    this.rotateMap(0);
+    App.showToast('🧭 Hướng Bắc được reset về 0°', 'success');
+  },
+
+  // ============================================================
+  // Two-finger Touch Rotation (Mobile)
+  // ============================================================
+  _initTouchRotation() {
+    const container = this.map.getContainer();
+    let startAngle = null;
+    let startBearing = 0;
+
+    const getTouchAngle = (t1, t2) => {
+      const dx = t2.clientX - t1.clientX;
+      const dy = t2.clientY - t1.clientY;
+      return Math.atan2(dy, dx) * 180 / Math.PI;
+    };
+
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        startAngle = getTouchAngle(e.touches[0], e.touches[1]);
+        startBearing = this.mapBearing;
+      }
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && startAngle !== null) {
+        const currentAngle = getTouchAngle(e.touches[0], e.touches[1]);
+        const delta = currentAngle - startAngle;
+        this.rotateMap(startBearing + delta);
+      }
+    }, { passive: true });
+
+    container.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) {
+        startAngle = null;
+      }
+    }, { passive: true });
+  },
+
+  // ============================================================
+  // Distance Measurement
+  // ============================================================
+  toggleMeasure() {
+    this.measureMode = !this.measureMode;
+    const btn = document.getElementById('measure-btn');
+    if (this.measureMode) {
+      this._clearMeasure();
+      if (btn) btn.classList.add('active');
+      this.map.getContainer().style.cursor = 'crosshair';
+      App.showToast('📏 Chế độ đo khoảng cách: Click vào bản đồ để thêm điểm. Double-click để kết thúc.', 'info', 4000);
+      // Double-click to finish
+      this._measureDblClickHandler = (e) => {
+        if (this.measureMode) {
+          L.DomEvent.stopPropagation(e);
+          this.finishMeasure();
+        }
+      };
+      this.map.on('dblclick', this._measureDblClickHandler);
+    } else {
+      this.finishMeasure();
+    }
+    return this.measureMode;
+  },
+
+  _addMeasurePoint(latlng) {
+    this.measurePoints.push(latlng);
+    // Draw marker
+    const idx = this.measurePoints.length;
+    const marker = L.circleMarker(latlng, {
+      radius: 5,
+      color: '#00d2ff',
+      fillColor: '#00d2ff',
+      fillOpacity: 1,
+      weight: 2,
+    }).addTo(this.measureLayer);
+    // Label index
+    const label = L.divIcon({
+      html: `<div style="background:#00d2ff;color:#000;font-size:10px;font-weight:700;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;margin-left:6px;margin-top:-9px;">${idx}</div>`,
+      className: '',
+      iconSize: [18, 18],
+      iconAnchor: [-3, 9],
+    });
+    L.marker(latlng, { icon: label, interactive: false }).addTo(this.measureLayer);
+    this.measureMarkers.push(marker);
+
+    // Draw line
+    if (this.measurePoints.length >= 2) {
+      const pts = this.measurePoints;
+      const seg = [pts[pts.length - 2], pts[pts.length - 1]];
+      L.polyline(seg, { color: '#00d2ff', weight: 2.5, dashArray: '6, 4', opacity: 0.9 }).addTo(this.measureLayer);
+
+      // Show total distance
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) {
+        total += pts[i - 1].distanceTo(pts[i]);
+      }
+      const distText = total >= 1000 ? (total / 1000).toFixed(3) + ' km' : Math.round(total) + ' m';
+      const el = document.getElementById('measure-distance-display');
+      if (el) { el.textContent = '📏 ' + distText; el.style.display = 'block'; }
+    }
+  },
+
+  finishMeasure() {
+    this.measureMode = false;
+    const btn = document.getElementById('measure-btn');
+    if (btn) btn.classList.remove('active');
+    this.map.getContainer().style.cursor = '';
+    if (this._measureDblClickHandler) {
+      this.map.off('dblclick', this._measureDblClickHandler);
+      this._measureDblClickHandler = null;
+    }
+    if (this.measurePoints.length < 2) {
+      this._clearMeasure();
+    }
+  },
+
+  _clearMeasure() {
+    this.measurePoints = [];
+    this.measureMarkers = [];
+    if (this.measureLayer) this.measureLayer.clearLayers();
+    const el = document.getElementById('measure-distance-display');
+    if (el) { el.textContent = ''; el.style.display = 'none'; }
+  },
+
+  clearMeasure() {
+    this._clearMeasure();
+    this.measureMode = false;
+    const btn = document.getElementById('measure-btn');
+    if (btn) btn.classList.remove('active');
+    this.map.getContainer().style.cursor = '';
   },
 };

@@ -1,4 +1,12 @@
-/**
+
+window.addEventListener('error', function(e) {
+  alert("JS Error: " + e.message + " | file: " + e.filename + " | line: " + e.lineno);
+});
+window.addEventListener('unhandledrejection', function(e) {
+  alert("Promise Error: " + (e.reason ? e.reason.message || e.reason : 'Unknown'));
+});
+
+﻿/**
  * BTS Progress Tracker - Main Application Controller
  */
 const App = {
@@ -10,6 +18,8 @@ const App = {
   // Initialize App
   // ============================================================
   async init() {
+    if (window.AIAssistant) { window.AIAssistant.init(); }
+
     // Register service worker
     this.registerSW();
 
@@ -1218,7 +1228,15 @@ const App = {
     };
 
     // Filter sites with 'Kế hoạch ngày' matching today
-    const planSites = sites.filter(s => isToday(s['Kế hoạch ngày']));
+    let planSites = sites.filter(s => isToday(s['Kế hoạch ngày']));
+    
+    // Apply Filters
+    if (App.dailyPlanFilterTKTU && App.dailyPlanFilterTKTU !== 'all') {
+      planSites = planSites.filter(s => String(s['TKTU ONSITE']||'').trim() === App.dailyPlanFilterTKTU);
+    }
+    if (App.dailyPlanFilterPartner && App.dailyPlanFilterPartner !== 'all') {
+      planSites = planSites.filter(s => String(s['Đối tác']||'').trim() === App.dailyPlanFilterPartner);
+    }
 
     const el = document.getElementById('dash-today-content');
     if (planSites.length === 0) {
@@ -1279,8 +1297,15 @@ const App = {
           5G: <strong style="color:var(--color-purple)">${plan5gDone}/${planTotal5g}</strong>
         </div>
         <div>
-          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2)" onchange="App.dailyPlanSort = this.value; App.renderDashboard()">
-            <option value="tktu" ${App.dailyPlanSort === 'tktu' ? 'selected' : ''}>Sort: TKTU</option>
+          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2); margin-right:5px;" onchange="App.dailyPlanFilterTKTU = this.value; App.renderDashboard()">
+            <option value="all">Filter: TKTU</option>
+            ${Array.from(new Set(sites.filter(s => isToday(s['Kế hoạch ngày'])).map(s => String(s['TKTU ONSITE']||'').trim()).filter(Boolean))).map(t => `<option value="${t}" ${App.dailyPlanFilterTKTU === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2); margin-right:5px;" onchange="App.dailyPlanFilterPartner = this.value; App.renderDashboard()">
+            <option value="all">Filter: Đối tác</option>
+            ${Array.from(new Set(sites.filter(s => isToday(s['Kế hoạch ngày'])).map(s => String(s['Đối tác']||'').trim()).filter(Boolean))).map(p => `<option value="${p}" ${App.dailyPlanFilterPartner === p ? 'selected' : ''}>${p}</option>`).join('')}
+          </select>
+          <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2)" onchange="App.dailyPlanSort = this.value; App.renderDashboard()"><option value="tktu" ${App.dailyPlanSort === 'tktu' ? 'selected' : ''}>Sort: TKTU</option>
             <option value="status" ${App.dailyPlanSort === 'status' ? 'selected' : ''}>Sort: Trạng thái</option>
             <option value="partner" ${App.dailyPlanSort === 'partner' ? 'selected' : ''}>Sort: Đối tác</option>
           </select>
@@ -1343,7 +1368,15 @@ const App = {
       return false;
     };
 
-    const planSites = sites.filter(s => isToday(s['Kế hoạch ngày']));
+    let planSites = sites.filter(s => isToday(s['Kế hoạch ngày']));
+    
+    // Apply Filters
+    if (App.dailyPlanFilterTKTU && App.dailyPlanFilterTKTU !== 'all') {
+      planSites = planSites.filter(s => String(s['TKTU ONSITE']||'').trim() === App.dailyPlanFilterTKTU);
+    }
+    if (App.dailyPlanFilterPartner && App.dailyPlanFilterPartner !== 'all') {
+      planSites = planSites.filter(s => String(s['Đối tác']||'').trim() === App.dailyPlanFilterPartner);
+    }
     if (planSites.length === 0) {
       el.innerHTML = '<div class="dash-empty">Không có dữ liệu kế hoạch ngày hôm nay</div>';
       return;
@@ -1577,6 +1610,93 @@ const App = {
       </table>
       </div>
     `;
+
+    // this.renderDailyLineChart();
+  },
+
+  renderDailyLineChart() {
+    const ctxLine = document.getElementById('chart-daily-line');
+    if (!ctxLine) return;
+
+    const dailyMap = {};
+    let totalCompleted = 0;
+    
+    this.sites.forEach(s => {
+      if (DataService.getSiteStatus(s) === 'completed') {
+        const dStr = s['Ngày cập nhật'];
+        const m = String(dStr || '').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        if (m) {
+          const d = new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+          const fmt = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+          if (!dailyMap[fmt]) dailyMap[fmt] = { date: d, count: 0 };
+          dailyMap[fmt].count++;
+          totalCompleted++;
+        }
+      }
+    });
+
+    const sortedDates = Object.values(dailyMap).sort((a,b) => a.date - b.date);
+    const labels = [];
+    const dailyCounts = [];
+    const cumulativeCounts = [];
+    let cum = 0;
+
+    sortedDates.forEach(item => {
+      labels.push(`${String(item.date.getDate()).padStart(2,'0')}/${String(item.date.getMonth()+1).padStart(2,'0')}`);
+      dailyCounts.push(item.count);
+      cum += item.count;
+      cumulativeCounts.push(cum);
+    });
+
+    const numDays = labels.length;
+    const minPxPerDay = 65;
+    const containerEl = ctxLine.parentElement;
+    const containerWidth = (containerEl && containerEl.offsetWidth) || 400;
+    const canvasWidth = Math.max(containerWidth, numDays * minPxPerDay);
+    const needsScroll = canvasWidth > containerWidth;
+
+    if (containerEl) {
+      containerEl.style.overflowX = needsScroll ? 'auto' : 'hidden';
+      containerEl.style.overflowY = 'hidden';
+    }
+    ctxLine.style.width = canvasWidth + 'px';
+    ctxLine.style.height = '260px';
+
+    if (window.chartDailyLineInstance) window.chartDailyLineInstance.destroy();
+    window.chartDailyLineInstance = new Chart(ctxLine, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Hoàn thành trong ngày',
+            data: dailyCounts,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16,185,129,0.15)',
+            pointBackgroundColor: '#10b981',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2, datalabels: { align: 'top', anchor: 'end', color: '#10b981', font: { weight: 'bold', size: 11 } },
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            tension: 0.35,
+            fill: true,
+            yAxisID: 'y',
+          }
+        ]
+      },
+      plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          x: { ticks: { color: '#e2e8f0', font: { size: 10, weight: 'bold' } } },
+          y: { type: 'linear', position: 'left', ticks: { color: '#10b981', font: { size: 11, weight: 'bold' }, precision: 0 } }
+        }
+      }
+    });
   },
 
   renderPlanByGroup(sites, groupKey, elementId) {
@@ -1595,11 +1715,15 @@ const App = {
       if (String(s['Tiến độ 5G'] || '').trim() === 'Hoàn thành') groups[key].c5g++;
     });
 
-    const sorted = Object.entries(groups).sort((a, b) => {
+        const sorted = Object.entries(groups).sort((a, b) => {
       const pctA = a[1].total > 0 ? a[1].completed / a[1].total : 0;
       const pctB = b[1].total > 0 ? b[1].completed / b[1].total : 0;
-      if (pctB !== pctA) return pctB - pctA;
-      return b[1].total - a[1].total;
+      if (groupKey === 'Phân loại') {
+         if (a[1].total !== b[1].total) return a[1].total - b[1].total;
+         return pctA - pctB;
+      }
+      if (pctB !== pctA) return pctA - pctB;
+      return a[1].total - b[1].total;
     });
 
     el.innerHTML = `
@@ -1702,534 +1826,131 @@ const App = {
   // ============================================================
   renderCharts(sites) {
     if (!window.Chart) return;
+    try {
+    const fmt2 = n => String(n).padStart(2, '0');
+    const today = new Date();
+    const todayKey = `${fmt2(today.getDate())}/${fmt2(today.getMonth() + 1)}`;
+    const parseDate = str => { const m = String(str || '').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); return m ? new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])) : null; };
+    const dateKey = d => `${fmt2(d.getDate())}/${fmt2(d.getMonth() + 1)}`;
 
-    const ctxHuyen = document.getElementById('chart-huyen');
-    if (ctxHuyen) {
+    // ----- Helper: Combo Chart (Bar + Line %) -----
+    const renderCombo = (ctxId, groupFn, windowKey, sortByPct, titleText) => {
+      const ctx = document.getElementById(ctxId);
+      if (!ctx) return;
       const groups = {};
       sites.forEach(s => {
-        const key = String(s['Huyện'] || 'Khác').trim();
-        if (!groups[key]) groups[key] = { total: 0, comp: 0, ip: 0, p: 0 };
+        const key = groupFn(s);
+        if (!groups[key]) groups[key] = { total: 0, comp: 0 };
         groups[key].total++;
-        const status = DataService.getSiteStatus(s);
-        if (status === 'completed') groups[key].comp++;
-        else if (status === 'in_progress') groups[key].ip++;
-        else groups[key].p++;
+        if (DataService.getSiteStatus(s) === 'completed') groups[key].comp++;
       });
-      const huyenKeys = Object.keys(groups).sort((a,b) => groups[b].total - groups[a].total);
-      
-      window._huyenData = groups;
-      
-      const customHuyenPlugin = {
-        id: 'customHuyenLabels',
-        afterDatasetsDraw(chart, args, options) {
-          const { ctx } = chart;
-          ctx.save();
-          ctx.font = '11px Arial';
-          ctx.fillStyle = document.documentElement.getAttribute('data-pdf-export') ? '#000000' : '#cbd5e1';
-          ctx.textBaseline = 'middle';
-          
-          const metaIp = chart.getDatasetMeta(0);
-          const metaComp = chart.getDatasetMeta(1);
-          const metaPend = chart.getDatasetMeta(2);
-          
-                    chart.data.labels.forEach((label, index) => {
-            const data = groups[label];
-            if (!data || data.total === 0) return;
-            
-            const metaIp = chart.getDatasetMeta(0);
-            const metaComp = chart.getDatasetMeta(1);
-            const metaPend = chart.getDatasetMeta(2);
-            
-            const widthRed = metaIp.data[index] ? metaIp.data[index].x - metaIp.data[index].base : 0;
-            const widthGreen = metaComp.data[index] ? metaComp.data[index].x - metaComp.data[index].base : 0;
-            
-            const hasRed = data.ip > 0;
-            const hasGreen = data.comp > 0;
-            const yPos = metaIp.data[index] ? metaIp.data[index].y : (metaComp.data[index] ? metaComp.data[index].y : 0);
-            
-            let drawRed = false;
-            let redX = 0;
-            let redAlign = 'right';
-            const redPct = (data.ip / data.total * 100).toFixed(2) + '%';
-            
-            if (hasRed) {
-              if (hasGreen) {
-                redX = metaComp.data[index].base + 5;
-                redAlign = 'left';
-                if (widthGreen > 75) drawRed = true;
-              } else {
-                if (widthRed > 30) {
-                  redX = metaIp.data[index].x - 5;
-                  redAlign = 'right';
-                  drawRed = true;
-                }
-              }
-            }
-            
-            let drawGreen = false;
-            let greenX = 0;
-            let greenAlign = 'right';
-            const greenPct = (data.comp / data.total * 100).toFixed(2) + '%';
-            
-            if (hasGreen && widthGreen > 30) {
-              greenX = metaComp.data[index].x - 5;
-              greenAlign = 'right';
-              drawGreen = true;
-            }
-            
-            if (drawRed) {
-              ctx.textAlign = redAlign;
-              ctx.fillText(redPct, redX, yPos);
-            }
-            if (drawGreen) {
-              ctx.textAlign = greenAlign;
-              ctx.fillText(greenPct, greenX, yPos);
-            }
-            
-            let maxX = Math.max(
-              metaIp.data[index] ? metaIp.data[index].x : 0,
-              metaComp.data[index] ? metaComp.data[index].x : 0,
-              metaPend.data[index] ? metaPend.data[index].x : 0
-            );
-            if (maxX > 0) {
-              const isMobile = window.innerWidth < 768;
-              const suffix = isMobile ? '' : ' trạm';
-              ctx.textAlign = 'left';
-              ctx.fillText(` ${data.total}${suffix}`, maxX + 5, yPos);
-            }
-          });
-          ctx.restore();
+      const keys = Object.keys(groups);
+      keys.sort((a, b) => {
+        if (sortByPct) {
+          const rA = groups[a].total > 0 ? groups[a].comp / groups[a].total : 0;
+          const rB = groups[b].total > 0 ? groups[b].comp / groups[b].total : 0;
+          return rA - rB;
         }
-      };
-
-      if (window.chartHuyenInstance) window.chartHuyenInstance.destroy();
-      window.chartHuyenInstance = new Chart(ctxHuyen, {
+        return groups[a].total - groups[b].total;
+      });
+      const totals = keys.map(k => groups[k].total);
+      const comps  = keys.map(k => groups[k].comp);
+      const rates  = keys.map(k => groups[k].total > 0 ? parseFloat((groups[k].comp / groups[k].total * 100).toFixed(1)) : 0);
+      if (window[windowKey]) window[windowKey].destroy();
+      const dlPlugin = window.ChartDataLabels ? [window.ChartDataLabels] : [];
+      window[windowKey] = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: huyenKeys,
+          labels: keys,
           datasets: [
-            { label: 'Đang thực hiện', data: huyenKeys.map(k=>groups[k].ip), backgroundColor: '#ef4444', maxBarThickness: 24, maxBarThickness: 24 },
-            { label: 'Hoàn thành', data: huyenKeys.map(k=>groups[k].comp), backgroundColor: '#10b981', maxBarThickness: 24, maxBarThickness: 24 },
-            { label: 'Chưa thực hiện', data: huyenKeys.map(k=>groups[k].p), backgroundColor: '#475569', maxBarThickness: 24, maxBarThickness: 24 }
+            { type: 'line', label: 'Tỷ lệ (%)', data: rates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { display: true, color: '#bfdbfe', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 12 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'bar', label: 'Hoàn thành', data: comps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { display: true, color: '#fff', anchor: 'center', align: 'center', font: { weight: 'bold', size: 13 }, formatter: v => v || '' } },
+            { type: 'bar', label: 'Khối lượng giao', data: totals, backgroundColor: 'rgba(239, 68, 68, 0.4)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { display: true, color: '#fca5a5', anchor: 'center', align: 'center', font: { weight: 'bold', size: 13 }, formatter: v => v || '' } }
           ]
         },
-        plugins: [customHuyenPlugin],
+        plugins: dlPlugin,
         options: {
-          indexAxis: 'y',
           responsive: true, maintainAspectRatio: false,
-          layout: { padding: { right: window.innerWidth < 768 ? 25 : 100 } },
-          scales: { 
-            x: { stacked: true, ticks:{color:'#cbd5e1'}, display: false }, 
-            y: { stacked: true, ticks:{color:'#cbd5e1'} } 
+          layout: { padding: { top: 18 } },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: '#e2e8f0', usePointStyle: true, boxWidth: 8, font: { size: 11, weight: 'bold' } } },
+            title: { display: true, text: titleText, color: '#f8fafc', font: { size: 14, weight: 'bold' } }
           },
-          plugins: { 
-            legend: { position: 'bottom', labels:{color:'#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 }} },
-            title: { display: true, text: 'Tiến độ theo Huyện', color: '#f8fafc' },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const pName = context.label;
-                  const data = window._huyenData ? window._huyenData[pName] : null;
-                  if (data) {
-                    const pct = data.total > 0 ? ((data.comp / data.total) * 100).toFixed(2) : 0;
-                    return [
-                      context.dataset.label + ': ' + context.parsed.x,
-                      `Tiến độ: ${pct}%`,
-                      `Hoàn thành: ${data.comp} / ${data.total} trạm`
-                    ];
-                  }
-                  return context.dataset.label + ': ' + context.parsed.x;
-                }
-              }
-            }
+          scales: {
+            x: { ticks: { color: '#cbd5e1', font: { size: 11, weight: 'bold' }, maxRotation: 30 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+            y: { type: 'linear', position: 'left', beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#94a3b8', font: { size: 11 } } },
+            y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { color: '#3b82f6', font: { size: 11, weight: 'bold' }, callback: v => v + '%' } }
           }
         }
       });
-    }
+    };
 
-    
-    // 1. Overall Completion Pie Chart
-    const total = sites.length;
-    let completed = 0;
-    let inProgress = 0;
-    let pending = 0;
-    
-    sites.forEach(s => {
-      const status = DataService.getSiteStatus(s);
-      if (status === 'completed') completed++;
-      else if (status === 'in_progress') inProgress++;
-      else pending++;
-    });
+    renderCombo('chart-partners', s => String(s['Đối tác'] || 'Khác').trim(), 'chartPartInstance', true, 'Tiến độ theo Đối tác');
+    renderCombo('chart-class',    s => String(s['Phân loại'] || 'Khác').trim(), 'chartClassInstance', false, 'Tiến độ theo Phân loại');
+    renderCombo('chart-huyen',    s => String(s['Huyện'] || 'Khác').trim(), 'chartHuyenInstance', false, 'Tiến độ theo Huyện');
 
-    const pctComp = total > 0 ? ((completed/total)*100).toFixed(2) : "0.00";
-    const pctIp = total > 0 ? ((inProgress/total)*100).toFixed(2) : "0.00";
-    const pctPend = total > 0 ? ((pending/total)*100).toFixed(2) : "0.00";
-
+    // ----- Overall Donut -----
     const ctxOverall = document.getElementById('chart-overall');
     if (ctxOverall) {
+      const total = sites.length;
+      const completed  = sites.filter(s => DataService.getSiteStatus(s) === 'completed').length;
+      const inProgress = sites.filter(s => DataService.getSiteStatus(s) === 'in_progress').length;
+      const notUpdated = total - completed - inProgress;
+      const pctComp = total > 0 ? (completed / total * 100).toFixed(1) : 0;
+      const pctIp = total > 0 ? (inProgress / total * 100).toFixed(1) : 0;
+      const pctNot = total > 0 ? (notUpdated / total * 100).toFixed(1) : 0;
+
       if (window.chartOverallInstance) window.chartOverallInstance.destroy();
       window.chartOverallInstance = new Chart(ctxOverall, {
         type: 'doughnut',
-        data: {
-          labels: [`Hoàn thành (${pctComp}%)`, `Đang thực hiện (${pctIp}%)`, `Chưa thực hiện (${pctPend}%)`],
-          datasets: [{
-            data: [completed, inProgress, pending],
-            backgroundColor: ['#10b981', '#ef4444', '#475569'],
-            borderWidth: 0
-          }]
-        },
+        data: { labels: [`Hoàn thành: ${completed} (${pctComp}%)`, `Đang thực hiện: ${inProgress} (${pctIp}%)`, `Chưa thực hiện: ${notUpdated} (${pctNot}%)`], datasets: [{ data: [completed, inProgress, notUpdated], backgroundColor: ['#10b981', '#ef4444', '#cbd5e1'], borderWidth: 0, hoverOffset: 4 }] },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false, cutout: '70%',
           plugins: {
-            legend: { position: 'bottom', labels: { color: '#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 } } },
-            title: { display: true, text: 'Tổng quan tiến độ', color: '#f8fafc' }
+            legend: { display: true, position: 'bottom', labels: { color: '#f1f5f9', usePointStyle: true, font: { size: 13, weight: 'bold' } } },
+            tooltip: { enabled: true },
+            title: { display: true, text: 'Tiến độ tổng thể', color: '#f8fafc', font: { size: 15, weight: 'bold' } }
           }
         }
       });
     }
 
-    // 2. Categories Bar Chart (Horizontal)
-    const categories = {};
-    sites.forEach(s => {
-      const c = String(s['Phân loại'] || 'Khác').trim();
-      if (!categories[c]) categories[c] = { total: 0, comp: 0, ip: 0, p: 0 };
-      categories[c].total++;
-      const status = DataService.getSiteStatus(s);
-      if (status === 'completed') categories[c].comp++;
-      else if (status === 'in_progress') categories[c].ip++;
-      else categories[c].p++;
-    });
-
-    const cLabels = Object.keys(categories).sort((a,b) => categories[b].total - categories[a].total);
-    const cComp = cLabels.map(k => categories[k].comp);
-    const cIp = cLabels.map(k => categories[k].ip);
-    const cPend = cLabels.map(k => categories[k].p);
-
-    window._catData = categories;
-
-    const customCatPlugin = {
-      id: 'customCatLabels',
-      afterDatasetsDraw(chart, args, options) {
-        const { ctx } = chart;
-        ctx.save();
-        ctx.font = '11px Arial';
-        ctx.fillStyle = document.documentElement.getAttribute('data-pdf-export') ? '#000000' : '#cbd5e1';
-        ctx.textBaseline = 'middle';
-        
-        const metaIp = chart.getDatasetMeta(0);
-        const metaComp = chart.getDatasetMeta(1);
-        const metaPend = chart.getDatasetMeta(2);
-        
-        chart.data.labels.forEach((label, index) => {
-          const data = categories[label];
-          if (!data || data.total === 0) return;
-          
-          const widthRed = metaIp.data[index] ? metaIp.data[index].x - metaIp.data[index].base : 0;
-          const widthGreen = metaComp.data[index] ? metaComp.data[index].x - metaComp.data[index].base : 0;
-          
-          const hasRed = data.ip > 0;
-          const hasGreen = data.comp > 0;
-          const yPos = metaIp.data[index] ? metaIp.data[index].y : (metaComp.data[index] ? metaComp.data[index].y : 0);
-          
-          let drawRed = false;
-          let redX = 0;
-          let redAlign = 'right';
-          const redPct = (data.ip / data.total * 100).toFixed(2) + '%';
-          
-          if (hasRed) {
-            if (hasGreen) {
-              redX = metaComp.data[index].base + 5;
-              redAlign = 'left';
-              if (widthGreen > 75) drawRed = true;
-            } else {
-              if (widthRed > 30) {
-                redX = metaIp.data[index].x - 5;
-                redAlign = 'right';
-                drawRed = true;
-              }
-            }
-          }
-          
-          let drawGreen = false;
-          let greenX = 0;
-          let greenAlign = 'right';
-          const greenPct = (data.comp / data.total * 100).toFixed(2) + '%';
-          
-          if (hasGreen && widthGreen > 30) {
-            greenX = metaComp.data[index].x - 5;
-            greenAlign = 'right';
-            drawGreen = true;
-          }
-          
-          if (drawRed) {
-            ctx.textAlign = redAlign;
-            ctx.fillText(redPct, redX, yPos);
-          }
-          if (drawGreen) {
-            ctx.textAlign = greenAlign;
-            ctx.fillText(greenPct, greenX, yPos);
-          }
-          
-          let maxX = Math.max(
-            metaIp.data[index] ? metaIp.data[index].x : 0,
-            metaComp.data[index] ? metaComp.data[index].x : 0,
-            metaPend.data[index] ? metaPend.data[index].x : 0
-          );
-          if (maxX > 0) {
-            ctx.textAlign = 'left';
-            ctx.fillText(` ${data.total} trạm`, maxX + 5, yPos);
-          }
-        });
-        ctx.restore();
-      }
-    };
-
-    const ctxCat = document.getElementById('chart-categories');
-    if (ctxCat) {
-      if (window.chartCatInstance) window.chartCatInstance.destroy();
-      window.chartCatInstance = new Chart(ctxCat, {
-        type: 'bar',
-        data: {
-          labels: cLabels,
-          datasets: [
-            { label: 'Đang thực hiện', data: cIp, backgroundColor: '#ef4444', maxBarThickness: 24 },
-            { label: 'Hoàn thành', data: cComp, backgroundColor: '#10b981', maxBarThickness: 24 },
-            { label: 'Chưa thực hiện', data: cPend, backgroundColor: '#475569', maxBarThickness: 24 }
-          ]
-        },
-        plugins: [customCatPlugin],
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          layout: { padding: { right: window.innerWidth < 768 ? 25 : 100 } },
-          scales: {
-            x: { stacked: true, ticks: { color: '#cbd5e1' }, display: false },
-            y: { stacked: true, ticks: { color: '#cbd5e1' } }
-          },
-          plugins: {
-            legend: { position: 'bottom', labels: { color: '#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 } } },
-            title: { display: true, text: 'Tiến độ theo Phân loại', color: '#f8fafc' },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const pName = context.label;
-                  const data = window._catData ? window._catData[pName] : null;
-                  if (data) {
-                    const pct = data.total > 0 ? ((data.comp / data.total) * 100).toFixed(2) : 0;
-                    return [
-                      context.dataset.label + ': ' + context.parsed.x,
-                      `Hoàn thành: ${pct}%`,
-                      `Tiến độ: ${data.comp} / ${data.total} trạm`
-                    ];
-                  }
-                  return context.dataset.label + ': ' + context.parsed.x;
-                }
-              }
-            }
-          }
-        }
-      });
-    }
-    
-    // 3. Partners % Completion Chart (Horizontal)
-    const partners = {};
-    sites.forEach(s => {
-      const p = String(s['Đối tác'] || 'Khác').trim();
-      if (!partners[p]) partners[p] = { total: 0, comp: 0, ip: 0, p: 0 };
-      partners[p].total++;
-      const status = DataService.getSiteStatus(s);
-      if (status === 'completed') partners[p].comp++;
-      else if (status === 'in_progress') partners[p].ip++;
-      else partners[p].p++;
-    });
-
-    const pKeys = Object.keys(partners).sort((a,b) => partners[b].total - partners[a].total);
-    const pLabels = pKeys;
-    const pComp = pKeys.map(k => partners[k].comp);
-    const pIp = pKeys.map(k => partners[k].ip);
-    const pPend = pKeys.map(k => partners[k].p);
-    
-    window._partnersData = partners;
-
-    const customPartPlugin = {
-      id: 'customPartLabels',
-      afterDatasetsDraw(chart, args, options) {
-        const { ctx } = chart;
-        ctx.save();
-        ctx.font = '11px Arial';
-        ctx.fillStyle = document.documentElement.getAttribute('data-pdf-export') ? '#000000' : '#cbd5e1';
-        ctx.textBaseline = 'middle';
-        
-        const metaIp = chart.getDatasetMeta(0);
-        const metaComp = chart.getDatasetMeta(1);
-        const metaPend = chart.getDatasetMeta(2);
-        
-        chart.data.labels.forEach((label, index) => {
-          const data = window._partnersData ? window._partnersData[label] : null;
-          if (!data || data.total === 0) return;
-          
-          const widthRed = metaIp.data[index] ? metaIp.data[index].x - metaIp.data[index].base : 0;
-          const widthGreen = metaComp.data[index] ? metaComp.data[index].x - metaComp.data[index].base : 0;
-          
-          const hasRed = data.ip > 0;
-          const hasGreen = data.comp > 0;
-          const yPos = metaIp.data[index] ? metaIp.data[index].y : (metaComp.data[index] ? metaComp.data[index].y : 0);
-          
-          let drawRed = false;
-          let redX = 0;
-          let redAlign = 'right';
-          const redPct = (data.ip / data.total * 100).toFixed(2) + '%';
-          
-          if (hasRed) {
-            if (hasGreen) {
-              redX = metaComp.data[index].base + 5;
-              redAlign = 'left';
-              if (widthGreen > 75) drawRed = true;
-            } else {
-              if (widthRed > 30) {
-                redX = metaIp.data[index].x - 5;
-                redAlign = 'right';
-                drawRed = true;
-              }
-            }
-          }
-          
-          let drawGreen = false;
-          let greenX = 0;
-          let greenAlign = 'right';
-          const greenPct = (data.comp / data.total * 100).toFixed(2) + '%';
-          
-          if (hasGreen && widthGreen > 30) {
-            greenX = metaComp.data[index].x - 5;
-            greenAlign = 'right';
-            drawGreen = true;
-          }
-          
-          if (drawRed) {
-            ctx.textAlign = redAlign;
-            ctx.fillText(redPct, redX, yPos);
-          }
-          if (drawGreen) {
-            ctx.textAlign = greenAlign;
-            ctx.fillText(greenPct, greenX, yPos);
-          }
-          
-          let maxX = Math.max(
-            metaIp.data[index] ? metaIp.data[index].x : 0,
-            metaComp.data[index] ? metaComp.data[index].x : 0,
-            metaPend.data[index] ? metaPend.data[index].x : 0
-          );
-          if (maxX > 0) {
-            const isMobile = window.innerWidth < 768;
-            const suffix = isMobile ? '' : ' trạm';
-            ctx.textAlign = 'left';
-            ctx.fillText(` ${data.total}${suffix}`, maxX + 5, yPos);
-          }
-        });
-        ctx.restore();
-      }
-    };
-
-    const ctxPart = document.getElementById('chart-partners');
-    if (ctxPart) {
-      if (window.chartPartInstance) window.chartPartInstance.destroy();
-      window.chartPartInstance = new Chart(ctxPart, {
-        type: 'bar',
-        data: {
-          labels: pLabels,
-          datasets: [
-            { label: 'Đang thực hiện', data: pIp, backgroundColor: '#ef4444', maxBarThickness: 24 },
-            { label: 'Hoàn thành', data: pComp, backgroundColor: '#10b981', maxBarThickness: 24 },
-            { label: 'Chưa thực hiện', data: pPend, backgroundColor: '#475569', maxBarThickness: 24 }
-          ]
-        },
-        plugins: [customPartPlugin],
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          layout: { padding: { right: window.innerWidth < 768 ? 25 : 100 } },
-          scales: {
-            x: { stacked: true, ticks: { color: '#cbd5e1' }, display: false },
-            y: { stacked: true, ticks: { color: '#cbd5e1' } }
-          },
-          plugins: {
-            legend: { position: 'bottom', labels: { color: '#cbd5e1', boxWidth: window.innerWidth < 768 ? 6 : 10, usePointStyle: true, padding: window.innerWidth < 768 ? 5 : 15, font: { size: window.innerWidth < 768 ? 9 : 12 } } },
-            title: { display: true, text: 'Tiến độ theo Đối tác', color: '#f8fafc' },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  const pName = context.label;
-                  const data = window._partnersData ? window._partnersData[pName] : null;
-                  if (data) {
-                    const pct = data.total > 0 ? ((data.comp / data.total) * 100).toFixed(2) : 0;
-                    return [
-                      context.dataset.label + ': ' + context.parsed.x,
-                      `Hoàn thành: ${pct}%`,
-                      `Tiến độ: ${data.comp} / ${data.total} trạm`
-                    ];
-                  }
-                  return context.dataset.label + ': ' + context.parsed.x;
-                }
-              }
-            }
-          }
-        }
-      });
-    }
-    
-    // Add mobile custom views
-    if (window.innerWidth < 768) {
-      if (window._catData) this.renderMobileChartView(window._catData, 'mobile-chart-categories', 'Tiến độ chi tiết theo Phân loại');
-    }
-  },
-
-  renderMobileChartView(dataObj, containerId, title) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    
-    const keys = Object.keys(dataObj).sort((a,b) => dataObj[b].total - dataObj[a].total);
-    
-    let html = `
-      <div class="section-title" style="font-size:14px;font-weight:600;margin-bottom:12px;border-left:3px solid var(--color-blue);padding-left:8px;color:#fff;">
-        ${title}
-      </div>
-      <div class="chart-legend">
-        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--color-red)"></div> Đang làm (Đỏ)</div>
-        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--color-green)"></div> Đã xong (Xanh)</div>
-        <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--color-pending)"></div> Chưa làm</div>
-      </div>
-      <div class="partner-list">
-    `;
-    
-    keys.forEach((key, index) => {
-      const data = dataObj[key];
-      const pct = data.total > 0 ? (data.comp / data.total * 100).toFixed(2) : 0;
-      const pctIp = data.total > 0 ? (data.ip / data.total * 100).toFixed(2) : 0;
+    // ----- Daily Line Chart (no legend, with numbers on markers, blue with shadow) -----
+    const ctxDaily = document.getElementById('chart-daily-line');
+    if (ctxDaily) {
+      const dMap = {};
+      dMap[todayKey] = { date: today, count: 0 };
       
-      html += `
-        <div class="partner-item">
-          <div class="partner-info">
-            <span class="partner-name">${index + 1}. ${key} (Tỷ lệ: ${pct}%)</span>
-            <span class="partner-stats">Tổng: <b>${data.total}</b> trạm</span>
-          </div>
-          <div class="stacked-bar">
-            <div class="segment seg-prog" style="width: ${pctIp}%;" title="Đang làm">${data.ip > 0 ? Math.round(pctIp) + '%' : ''}</div>
-            <div class="segment seg-comp" style="width: ${pct}%;" title="Hoàn thành">${data.comp > 0 ? Math.round(pct) + '%' : ''}</div>
-          </div>
-        </div>
-      `;
-    });
-    html += '</div>';
-    
-    container.innerHTML = html;
+      sites.forEach(s => {
+        if (DataService.getSiteStatus(s) !== 'completed') return;
+        const d = parseDate(s['Ngày cập nhật']); if (!d) return;
+        const k = dateKey(d);
+        if (!dMap[k]) dMap[k] = { date: d, count: 0 };
+        dMap[k].count++;
+      });
+      const sorted = Object.values(dMap).sort((a, b) => a.date - b.date);
+      const labels = sorted.map(i => dateKey(i.date));
+      const vals   = sorted.map(i => i.count);
+      if (window.chartDailyLineInstance) { window.chartDailyLineInstance.destroy(); window.chartDailyLineInstance = null; }
+      if (window.chartDailyInstance) { window.chartDailyInstance.destroy(); window.chartDailyInstance = null; }
+      const dlPlugin = window.ChartDataLabels ? [window.ChartDataLabels] : [];
+      window.chartDailyInstance = new Chart(ctxDaily, {
+        type: 'line',
+        data: { labels, datasets: [{ label: 'Hoàn thành', data: vals, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', fill: true, tension: 0.3, pointRadius: 5, borderWidth: 3, datalabels: { display: true, color: '#93c5fd', anchor: 'end', align: 'top', font: { weight: 'bold', size: 12 }, formatter: v => v > 0 ? v : '' } }] },
+        plugins: dlPlugin,
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          layout: { padding: { top: 16 } },
+          plugins: { legend: { display: false }, title: { display: true, text: 'Xu hướng hoàn thành theo ngày', color: '#f8fafc', font: { size: 14, weight: 'bold' } } },
+          scales: { x: { ticks: { color: '#cbd5e1', font: { size: 11, weight: 'bold' }, maxRotation: 45 }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#94a3b8', font: { size: 11 } } } }
+        }
+      });
+    }
+    } catch(err) {
+      alert("Lỗi khi vẽ biểu đồ: " + err.message + "\nStack: " + err.stack);
+      console.error(err);
+    }
   },
-
-  // ============================================================
-  // Site List & Details Modals
-  // ============================================================
   showSiteList(filterId, title) {
     this.currentListFilter = filterId;
     this.currentListTitle = title;
@@ -2458,6 +2179,17 @@ const App = {
     
     ordered['Tiến độ 4G'] = p4g;
     ordered['Tiến độ 5G'] = p5g;
+    
+    // Ghi chú (TKTU ONSITE) only
+    let ghiChu = '';
+    for (const k in site) {
+      if (k.trim() === 'Ghi chú (TKTU ONSITE)') {
+        ghiChu = site[k] || '';
+        break;
+      }
+    }
+    ordered['Ghi chú'] = ghiChu;
+
     ordered['Status'] = DataService.getStatusLabel(DataService.getSiteStatus(site)) || '';
     ordered['User cập nhật'] = site['User cập nhật'] || '';
     ordered['Ngày cập nhật'] = site['Ngày cập nhật'] || '';
@@ -2482,190 +2214,295 @@ const App = {
 
   exportDashboardPDF() {
     const role = Auth.getRole();
-    if (role !== 'admin') return App.showToast('Chỉ Admin mới được xuất báo cáo PDF', 'error');
-    if (!window.html2pdf) return App.showToast('Lỗi: Thư viện PDF chưa tải', 'error');
+    if (role !== 'admin') return App.showToast('Chỉ Admin mới được xuất báo cáo PNG', 'error');
+    if (!window.html2canvas) return App.showToast('Lỗi: Thư viện html2canvas chưa tải', 'error');
+
+    App.showLoading('Đang chuẩn bị infographic...');
+
+    const sites = App.sites || [];
+    const total = sites.length;
+    const completed = sites.filter(s => DataService.getSiteStatus(s) === 'completed').length;
+    const inProgress = sites.filter(s => DataService.getSiteStatus(s) === 'in_progress').length;
+    const pending = total - completed - inProgress;
+    const pctComp = total > 0 ? ((completed / total) * 100).toFixed(1) : '0.0';
+    const pctIP   = total > 0 ? ((inProgress / total) * 100).toFixed(1) : '0.0';
+    const pctPend = total > 0 ? ((pending / total) * 100).toFixed(1) : '0.0';
+    const fmt2 = n => String(n).padStart(2,'0');
+    const now = new Date();
+    const todayDay = now.getDate(), todayMonth = now.getMonth(), todayYear = now.getFullYear();
+    const todayStr = `${fmt2(todayDay)}/${fmt2(todayMonth+1)}/${todayYear}`;
+
+    // --- Partner Map (sorted by % asc) ---
+    const partnerMap = {};
+    sites.forEach(s => {
+      const p = String(s['Đối tác'] || 'Chưa phân').trim();
+      const st = DataService.getSiteStatus(s);
+      if (!partnerMap[p]) partnerMap[p] = { total:0, comp:0, ip:0 };
+      partnerMap[p].total++;
+      if (st === 'completed') partnerMap[p].comp++;
+      else if (st === 'in_progress') partnerMap[p].ip++;
+    });
+    const pNames = Object.keys(partnerMap).sort((a,b) => {
+      const rA = partnerMap[a].total > 0 ? partnerMap[a].comp/partnerMap[a].total : 0;
+      const rB = partnerMap[b].total > 0 ? partnerMap[b].comp/partnerMap[b].total : 0;
+      return rA - rB;
+    });
+    const pTotals = pNames.map(n => partnerMap[n].total);
+    const pComps  = pNames.map(n => partnerMap[n].comp);
+    const pRates  = pNames.map(n => partnerMap[n].total > 0 ? parseFloat((partnerMap[n].comp/partnerMap[n].total*100).toFixed(1)) : 0);
+
+    // --- Class Map (sorted by total asc) ---
+    const classMap = {};
+    sites.forEach(s => {
+      const c = String(s['Phân loại'] || 'Khác').trim();
+      const st = DataService.getSiteStatus(s);
+      if (!classMap[c]) classMap[c] = { total:0, comp:0 };
+      classMap[c].total++;
+      if (st === 'completed') classMap[c].comp++;
+    });
+    const cNames  = Object.keys(classMap).sort((a,b) => classMap[a].total - classMap[b].total);
+    const cTotals = cNames.map(n => classMap[n].total);
+    const cComps  = cNames.map(n => classMap[n].comp);
+    const cRates  = cNames.map(n => classMap[n].total > 0 ? parseFloat((classMap[n].comp/classMap[n].total*100).toFixed(1)) : 0);
+
+    // --- Plan Map ---
+    const isToday = val => {
+      const m = String(val||'').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      return m && parseInt(m[1])===todayDay && parseInt(m[2])-1===todayMonth && parseInt(m[3])===todayYear;
+    };
+    const planSites = sites.filter(s => isToday(s['Kế hoạch ngày']));
+    const planDone = planSites.filter(s => DataService.getSiteStatus(s) === 'completed').length;
+    const planIP   = planSites.filter(s => DataService.getSiteStatus(s) === 'in_progress').length;
+    const planPctDone = planSites.length > 0 ? ((planDone / planSites.length) * 100).toFixed(1) : 0;
+    const planPctIP = planSites.length > 0 ? ((planIP / planSites.length) * 100).toFixed(1) : 0;
+
+    const dpMap = {};
+    planSites.forEach(s => {
+      const p = String(s['Đối tác'] || 'Khác').trim();
+      if (!dpMap[p]) dpMap[p] = { total:0, comp:0 };
+      dpMap[p].total++;
+      if (DataService.getSiteStatus(s) === 'completed') dpMap[p].comp++;
+    });
+    const dpNames  = Object.keys(dpMap).sort((a,b) => dpMap[a].comp - dpMap[b].comp);
+    const dpTotals = dpNames.map(n => dpMap[n].total);
+    const dpComps  = dpNames.map(n => dpMap[n].comp);
+    const dpRates  = dpNames.map(n => dpMap[n].total > 0 ? parseFloat((dpMap[n].comp/dpMap[n].total*100).toFixed(1)) : 0);
+
+    // --- Daily data ---
+    const parseDate = str => {
+      const m = String(str||'').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      return m ? new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1])) : null;
+    };
+    const dateKey = d => `${fmt2(d.getDate())}/${fmt2(d.getMonth()+1)}`;
+    const todayKey = `${fmt2(todayDay)}/${fmt2(todayMonth+1)}`;
+    const dailyMap = {};
+    dailyMap[todayKey] = { date: now, count: 0, raw: now };
+
+    sites.forEach(s => {
+      if (DataService.getSiteStatus(s) !== 'completed') return;
+      const d = parseDate(s['Ngày cập nhật']); if (!d) return;
+      const k = dateKey(d);
+      if (!dailyMap[k]) dailyMap[k] = { date:d, count:0, raw: d };
+      dailyMap[k].count++;
+    });
+    const dailySorted  = Object.values(dailyMap).sort((a,b) => a.date - b.date);
+    const dailyLabels  = dailySorted.map(i => dateKey(i.date));
+    const dailyVals    = dailySorted.map(i => i.count);
     
-    App.showLoading('Đang xuất Báo cáo PDF...');
+    // Average progress & Estimated days (Exclude Today)
+    const todayBegin = new Date(todayYear, todayMonth, todayDay).getTime();
+    const pastDays = dailySorted.filter(i => i.raw.getTime() < todayBegin);
+    const bestDay = pastDays.length ? pastDays.reduce((b,i) => i.count > b.count ? i : b, pastDays[0]) : null;
     
+    // Average of ALL past days
+    const totalPastCompleted = pastDays.reduce((sum, i) => sum + i.count, 0);
+    const avgPerDay = pastDays.length ? (totalPastCompleted / pastDays.length).toFixed(1) : 0;
+    
+    // Estimated days: Average of LAST 7 past days
+    const last7 = pastDays.slice(-7);
+    const totalLast7 = last7.reduce((sum, i) => sum + i.count, 0);
+    const avgLast7 = last7.length ? (totalLast7 / last7.length).toFixed(1) : 0;
+    const remaining = total - completed;
+    const daysToFinish = (avgLast7 > 0 && remaining > 0) ? Math.ceil(remaining / avgLast7) : null;
+
+    // ====================== HTML ======================
+    const html = `<div id="pdf-infographic" style="font-family:'Inter',Arial,sans-serif;background:#f8fafc;padding:0;width:1040px;">
+
+<!-- HEADER -->
+<div style="background:linear-gradient(135deg,#cc0022 0%,#ee0033 50%,#ff4455 100%);padding:36px 48px;color:#fff;text-align:center;">
+  <h1 style="font-size:34px;font-weight:900;margin:0;letter-spacing:2px;text-shadow:0 2px 8px rgba(0,0,0,0.25);">BÁO CÁO TIẾN ĐỘ TRIỂN KHAI</h1>
+</div>
+
+<!-- SECTION 2: Donut + KPI -->
+<div style="background:#fff;padding:32px 48px 24px;border-bottom:10px solid #f1f5f9;display:flex;gap:36px;align-items:flex-start;">
+  <!-- Donut -->
+  <div style="flex-shrink:0;width:300px;">
+    <div style="font-size:16px;font-weight:800;color:#ee0033;margin-bottom:12px;border-left:5px solid #ee0033;padding-left:12px;">Tiến độ tổng thể (${completed}/${total} trạm)</div>
+    <div style="display:flex; justify-content:center;">
+      <canvas id="png-donut" width="240" height="220" style="filter:drop-shadow(2px 6px 10px rgba(0,0,0,0.25));"></canvas>
+    </div>
+    <div style="margin-top:16px;font-size:13px;line-height:2.0;font-weight:800;color:#1e293b;">
+      <div><span style="display:inline-block;width:16px;height:16px;background:#10b981;border-radius:4px;margin-right:10px;vertical-align:middle;"></span>Hoàn thành: ${completed} (${pctComp}%)</div>
+      <div><span style="display:inline-block;width:16px;height:16px;background:#ef4444;border-radius:4px;margin-right:10px;vertical-align:middle;"></span>Đang thực hiện: ${inProgress} (${pctIP}%)</div>
+      <div><span style="display:inline-block;width:16px;height:16px;background:#94a3b8;border-radius:4px;margin-right:10px;vertical-align:middle;"></span>Chưa thực hiện: ${pending} (${pctPend}%)</div>
+    </div>
+    <!-- Progress bar -->
+    <div style="margin-top:16px;background:#e2e8f0;border-radius:8px;height:18px;overflow:hidden;display:flex;">
+      <div style="background:#10b981;width:${pctComp}%;height:100%;"></div>
+      <div style="background:#ef4444;width:${pctIP}%;height:100%;"></div>
+    </div>
+  </div>
+  <!-- KPI Cards -->
+  <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;padding-top:40px;">
+    <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:14px;padding:22px;border:1px solid #bfdbfe;">
+      <div style="font-size:11px;color:#1d4ed8;font-weight:800;letter-spacing:0.5px;margin-bottom:10px;">KẾ HOẠCH HÔM NAY (${todayStr})</div>
+      <div style="font-size:36px;font-weight:900;color:#1e3a8a;">${planSites.length}<span style="font-size:15px;font-weight:700;"> trạm</span></div>
+      <div style="font-size:13px;color:#1d4ed8;margin-top:10px;font-weight:700;line-height:1.6;">✅ Hoàn thành ${planDone} (${planPctDone}%)<br/>🔄 Đang thực hiện ${planIP} (${planPctIP}%)</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:14px;padding:22px;border:1px solid #bbf7d0;">
+      <div style="font-size:11px;color:#15803d;font-weight:800;letter-spacing:0.5px;margin-bottom:10px;">HIỆU SUẤT CAO NHẤT / NGÀY</div>
+      <div style="font-size:36px;font-weight:900;color:#15803d;">${bestDay ? bestDay.count : '-'}<span style="font-size:15px;font-weight:700;"> trạm</span></div>
+      <div style="font-size:13px;color:#166534;margin-top:10px;font-weight:700;">${bestDay ? dateKey(bestDay.date) : 'Chưa có dữ liệu'}</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#fefce8,#fef9c3);border-radius:14px;padding:22px;border:1px solid #fde68a;">
+      <div style="font-size:11px;color:#92400e;font-weight:800;letter-spacing:0.5px;margin-bottom:10px;">TIẾN ĐỘ TRUNG BÌNH</div>
+      <div style="font-size:36px;font-weight:900;color:#92400e;">${avgPerDay}<span style="font-size:15px;font-weight:700;"> trạm/ngày</span></div>
+      <div style="font-size:13px;color:#78350f;margin-top:10px;font-weight:700;line-height:1.6;">${daysToFinish ? `Ước tính ~${daysToFinish} ngày nữa hoàn thành KH` : remaining===0?'Đã hoàn thành!':'Chưa đủ dữ liệu'}</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: Đối tác + Daily trend -->
+<div style="background:#fff;padding:32px 48px;border-bottom:10px solid #f1f5f9;display:flex;gap:40px;">
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:16px;font-weight:800;color:#ee0033;margin-bottom:20px;border-left:5px solid #ee0033;padding-left:12px;">Tiến độ theo Đối tác</div>
+    <div style="height:260px;position:relative;width:100%;"><canvas id="png-partners"></canvas></div>
+  </div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:16px;font-weight:800;color:#10b981;margin-bottom:20px;border-left:5px solid #10b981;padding-left:12px;">Xu hướng hoàn thành theo ngày</div>
+    <div style="height:260px;position:relative;width:100%;"><canvas id="png-daily"></canvas></div>
+  </div>
+</div>
+
+<!-- SECTION 4: Phân loại + Kế hoạch ngày -->
+<div style="background:#fff;padding:32px 48px 48px;display:flex;gap:40px;">
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:16px;font-weight:800;color:#1d4ed8;margin-bottom:20px;border-left:5px solid #1d4ed8;padding-left:12px;">Tiến độ theo Phân loại</div>
+    <div style="height:260px;position:relative;width:100%;"><canvas id="png-class"></canvas></div>
+  </div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:16px;font-weight:800;color:#f59e0b;margin-bottom:20px;border-left:5px solid #f59e0b;padding-left:12px;">Kế hoạch ngày ${todayStr} theo Đối tác</div>
+    <div style="height:260px;position:relative;width:100%;">${planSites.length > 0 ? '<canvas id="png-plan"></canvas>' : '<div style="color:#94a3b8;font-style:italic;padding:30px;font-weight:600;">Không có kế hoạch hôm nay</div>'}</div>
+  </div>
+</div>
+
+</div>`;
+
+    let wrapper = document.getElementById('pdf-infographic-wrapper');
+    if (wrapper) wrapper.remove();
+    wrapper = document.createElement('div');
+    wrapper.id = 'pdf-infographic-wrapper';
+    wrapper.style.cssText = 'position:fixed;left:-9999px;top:0;width:1040px;background:#fff;z-index:-1;';
+    wrapper.innerHTML = html;
+    document.body.appendChild(wrapper);
+
+    // Wait for DOM to render, then draw charts
     setTimeout(() => {
-      const element = document.querySelector('.dashboard-container');
-      
-      // Save original states
-      const headerBtns = document.querySelector('.dashboard-header div');
-      const headerTitle = document.querySelector('.dashboard-header h2');
-      const exportBtn = document.getElementById('dashboard-export-btn');
-      const closeBtn = document.getElementById('dashboard-close-btn');
-      const recentUpdates = document.getElementById('dash-recent-updates');
-      const recentUpdatesParent = recentUpdates ? recentUpdates.parentNode : null;
-      
-      const originalTitleText = headerTitle.innerHTML;
-      headerTitle.innerHTML = '📊 BÁO CÁO TIẾN ĐỘ'; // Change title
-      
-      const originalStyles = [];
-      
-      if (headerBtns) {
-        originalStyles.push({ el: headerBtns, display: headerBtns.style.display });
-        headerBtns.style.display = 'none';
-      } else {
-        if (exportBtn) {
-          originalStyles.push({ el: exportBtn, display: exportBtn.style.display });
-          exportBtn.style.display = 'none';
-        }
-        if (closeBtn) {
-          originalStyles.push({ el: closeBtn, display: closeBtn.style.display });
-          closeBtn.style.display = 'none';
-        }
-      }
-      
-      if (recentUpdatesParent) {
-        originalStyles.push({ el: recentUpdatesParent, display: recentUpdatesParent.style.display });
-        recentUpdatesParent.style.display = 'none';
-      }
-      
-      document.documentElement.setAttribute('data-pdf-export', 'true');
-      
-      // Inject gorgeous Light Theme for PDF
-      const printStyle = document.createElement('style');
-      printStyle.id = 'pdf-print-style';
-      printStyle.innerHTML = `
-        * { font-weight: 600 !important; }
-        .dashboard-container {
-           background-color: #ffffff !important;
-           color: #000000 !important;
-           padding: 30px !important;
-           border: none !important;
-           box-shadow: none !important;
-        }
-        .dashboard-header {
-           background: #ffffff !important;
-           border-bottom: 4px solid #1d4ed8 !important;
-           padding-bottom: 15px !important;
-           margin-bottom: 30px !important;
-        }
-        .dashboard-header h2 {
-           color: #1e3a8a !important;
-           font-size: 36px !important;
-           font-weight: 800 !important;
-           text-align: center !important;
-           justify-content: center !important;
-           width: 100% !important;
-           margin-bottom: 0 !important;
-           text-transform: uppercase !important;
-           text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-        }
-        .dash-card {
-           background: #ffffff !important;
-           border: 2px solid #e2e8f0 !important;
-           box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05) !important;
-        }
-        .dash-section {
-           background: #ffffff !important;
-           border: 2px solid #e2e8f0 !important;
-           box-shadow: 0 6px 12px rgba(0, 0, 0, 0.05) !important;
-        }
-        .dash-card-label {
-           color: #475569 !important;
-           font-weight: 800 !important;
-           font-size: 15px !important;
-        }
-        .dash-card-value {
-           font-weight: 800 !important;
-        }
-        .dash-table th {
-           background: #f1f5f9 !important;
-           color: #0f172a !important;
-           font-weight: 800 !important;
-           border-bottom: 2px solid #cbd5e1 !important;
-        }
-        .dash-table td {
-           border-bottom: 1px solid #e2e8f0 !important;
-           color: #000000 !important;
-           font-weight: 700 !important;
-        }
-        .dash-table tr:nth-child(even) {
-           background: #f8fafc !important;
-        }
-        .dash-section-title {
-           color: #1e3a8a !important;
-           border-left: 6px solid #2563eb !important;
-           background: linear-gradient(90deg, #eff6ff, #ffffff) !important;
-           padding: 12px 20px !important;
-           border-radius: 6px !important;
-           font-size: 19px !important;
-           font-weight: 800 !important;
-        }
-        .card-total .dash-card-value { color: #1d4ed8 !important; }
-        .card-completed .dash-card-value { color: #15803d !important; }
-        .card-progress .dash-card-value { color: #b91c1c !important; }
-        .card-pending .dash-card-value { color: #475569 !important; }
-      `;
-      document.head.appendChild(printStyle);
-
-      // Update Chart.js colors to bold dark text
-      const updateChartColor = (chart, color) => {
-         if (!chart) return;
-         if (chart.options.scales && chart.options.scales.x && chart.options.scales.x.ticks) {
-             chart.options.scales.x.ticks.color = color;
-             chart.options.scales.x.ticks.font = { weight: 'bold', size: 14 };
-         }
-         if (chart.options.scales && chart.options.scales.y && chart.options.scales.y.ticks) {
-             chart.options.scales.y.ticks.color = color;
-             chart.options.scales.y.ticks.font = { weight: 'bold', size: 14 };
-         }
-         if (chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels) {
-             chart.options.plugins.legend.labels.color = color;
-             chart.options.plugins.legend.labels.font = { weight: 'bold', size: 14 };
-         }
-         if (chart.options.plugins && chart.options.plugins.title) {
-             chart.options.plugins.title.color = color;
-             chart.options.plugins.title.font = { weight: 'bold', size: 16 };
-         }
-         chart.update('none'); // Update without animation
-      }
-      
-      updateChartColor(window.chartOverallInstance, '#000000');
-      updateChartColor(window.chartCatInstance, '#000000');
-      updateChartColor(window.chartPartInstance, '#000000');
-      updateChartColor(window.chartHuyenInstance, '#000000');
-
-      // Small delay for charts to re-render
-      setTimeout(() => {
-        const width = element.scrollWidth;
-        const height = element.scrollHeight + 40;
-        
-        const opt = {
-          margin:       [10, 0],
-          filename:     'Bao_Cao_Tien_Do.pdf',
-          image:        { type: 'jpeg', quality: 1 },
-          html2canvas:  { scale: 2, useCORS: true, windowWidth: width, windowHeight: height, scrollY: 0, backgroundColor: '#ffffff' },
-          jsPDF:        { unit: 'px', format: [width, height + 20], orientation: width > height ? 'landscape' : 'portrait' }
+      try {
+        const DL = window.ChartDataLabels ? [window.ChartDataLabels] : [];
+        const baseOpts = { animation: false, responsive: true, maintainAspectRatio: false };
+        const comboScales = {
+          x: { ticks: { font: { size: 12, weight: 'bold' }, color: '#475569' }, grid: { color: '#f1f5f9' } },
+          y: { type: 'linear', position: 'left', beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#64748b' } },
+          y1: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { font: { size: 11, weight: 'bold' }, color: '#3b82f6', callback: v => v + '%' } }
         };
-        
-        const restoreAll = () => {
-          App.hideLoading();
-          originalStyles.forEach(item => {
-            if (item.el) item.el.style.display = item.display;
-          });
-          headerTitle.innerHTML = originalTitleText; // Restore title
-          document.documentElement.removeAttribute('data-pdf-export');
-          printStyle.remove();
-          
-          updateChartColor(window.chartOverallInstance, '#cbd5e1');
-          updateChartColor(window.chartCatInstance, '#cbd5e1');
-          updateChartColor(window.chartPartInstance, '#cbd5e1');
-          updateChartColor(window.chartHuyenInstance, '#cbd5e1');
-        };
+        const comboLegend = { display: true, position: 'top', labels: { usePointStyle: true, font: { size: 12, weight: 'bold' }, color: '#334155' } };
 
-        html2pdf().set(opt).from(element).save().then(() => {
-          restoreAll();
-        }).catch(err => {
-          console.error(err);
-          App.showToast('Lỗi khi xuất PDF', 'error');
-          restoreAll();
+        // 1. Donut
+        const donutCtx = document.getElementById('png-donut');
+        if (donutCtx) new Chart(donutCtx, {
+          type: 'doughnut',
+          data: { labels: ['Hoàn thành','Đang thực hiện','Chưa thực hiện'], datasets: [{ data: [completed, inProgress, pending], backgroundColor: ['#10b981','#ef4444','#cbd5e1'], borderWidth: 3, borderColor: '#fff', hoverOffset: 4 }] },
+          options: { ...baseOpts, cutout: '65%', plugins: { legend: { display: false }, tooltip: { enabled: false } } }
         });
-      }, 500); // 500ms allows canvas to flush its render queue
-    }, 500);
+
+        // 2. Partner Combo
+        const partCtx = document.getElementById('png-partners');
+        if (partCtx) new Chart(partCtx, {
+          type: 'bar', plugins: DL,
+          data: { labels: pNames, datasets: [
+            { type: 'line', label: 'Tỷ lệ (%)', data: pRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'bar', label: 'Hoàn thành', data: pComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
+            { type: 'bar', label: 'Khối lượng giao', data: pTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
+          ]},
+          options: { ...baseOpts, layout: { padding: { top: 20 } }, plugins: { legend: comboLegend }, scales: comboScales }
+        });
+
+        // 3. Daily Line (blue with shadow)
+        const dailyCtx = document.getElementById('png-daily');
+        if (dailyCtx && dailyLabels.length > 0) new Chart(dailyCtx, {
+          type: 'line', plugins: DL,
+          data: { labels: dailyLabels, datasets: [
+            { label: 'Hoàn thành', data: dailyVals, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.2)', fill: true, tension: 0.3, borderWidth: 3, pointRadius: 5, datalabels: { color: '#1e3a8a', anchor: 'end', align: 'top', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v : '' } }
+          ]},
+          options: { ...baseOpts, layout: { padding: { top: 25 } },
+            plugins: { legend: { display: false } },
+            scales: { x: { ticks: { font: { size: 11, weight: 'bold' }, maxRotation: 45, color: '#475569' }, grid: { color: '#f1f5f9' } }, y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 } } } }
+          }
+        });
+
+        // 4. Class Combo
+        const classCtx = document.getElementById('png-class');
+        if (classCtx) new Chart(classCtx, {
+          type: 'bar', plugins: DL,
+          data: { labels: cNames, datasets: [
+            { type: 'line', label: 'Tỷ lệ (%)', data: cRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'bar', label: 'Hoàn thành', data: cComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
+            { type: 'bar', label: 'Khối lượng giao', data: cTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
+          ]},
+          options: { ...baseOpts, layout: { padding: { top: 20 } }, plugins: { legend: comboLegend }, scales: comboScales }
+        });
+
+        // 5. Plan Combo
+        const planCtx = document.getElementById('png-plan');
+        if (planCtx && dpNames.length > 0) new Chart(planCtx, {
+          type: 'bar', plugins: DL,
+          data: { labels: dpNames, datasets: [
+            { type: 'line', label: 'Tỷ lệ (%)', data: dpRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'start', align: 'bottom', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
+            { type: 'bar', label: 'Hoàn thành', data: dpComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
+            { type: 'bar', label: 'Kế hoạch', data: dpTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
+          ]},
+          options: { ...baseOpts, layout: { padding: { top: 20 } }, plugins: { legend: comboLegend }, scales: comboScales }
+        });
+
+      } catch(e) { console.error('[PNG Chart Error]', e); }
+
+      // Wait for charts to finish rendering then capture
+      setTimeout(() => {
+        const el = document.getElementById('pdf-infographic');
+        if (!el) { wrapper.remove(); App.hideLoading(); return; }
+        html2canvas(el, {
+          scale: 2, useCORS: true, backgroundColor: '#ffffff',
+          scrollY: 0, windowWidth: 1040, logging: false
+        }).then(canvas => {
+          const link = document.createElement('a');
+          const ts = `${fmt2(now.getDate())}${fmt2(now.getMonth()+1)}${now.getFullYear()}_${fmt2(now.getHours())}${fmt2(now.getMinutes())}`;
+          link.download = `BaoCaoTienDo_${ts}.png`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          wrapper.remove();
+          App.hideLoading();
+          App.showToast('Xuất ảnh PNG thành công!', 'success');
+        }).catch(err => {
+          console.error('[PNG]', err);
+          wrapper.remove();
+          App.hideLoading();
+          App.showToast('Lỗi khi xuất PNG: ' + err.message, 'error');
+        });
+      }, 1200);
+    }, 300);
   },
+
   exportDashboardExcel() {
     const role = Auth.getRole();
     if (!['admin', 'manager', 'export'].includes(role)) return App.showToast('Tài khoản của bạn không được xuất dữ liệu', 'error');
@@ -3065,3 +2902,4 @@ const App = {
 document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
+

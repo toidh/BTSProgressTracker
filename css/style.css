@@ -2002,3 +2002,80 @@ body[data-role="export"] .admin-only {
 .chart-legend-item { display: flex; align-items: center; gap: 4px; }
 .chart-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
 @media (max-width: 767px) { .desktop-chart-view { display: none !important; } .mobile-chart-view { display: block !important; } }
+
+/* ============================================================
+   MAP COMPASS & ROTATION
+   ============================================================ */
+#map-compass {
+  position: fixed;
+  bottom: 110px;
+  right: 14px;
+  z-index: 1001;
+  width: 52px;
+  cursor: pointer;
+  background: rgba(10, 14, 26, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+#map-compass:hover {
+  box-shadow: 0 4px 20px rgba(239,68,68,0.3);
+  transform: scale(1.05);
+}
+#map-compass:active {
+  transform: scale(0.97);
+}
+#map-compass svg {
+  display: block;
+}
+
+/* Map rotation: markers and popups counter-rotate so they stay upright */
+#map.map-rotated .leaflet-marker-icon,
+#map.map-rotated .leaflet-popup {
+  /* markers intentionally allowed to rotate with map for realism */
+}
+
+/* Rotate/North button active states */
+#rotate-left-btn.active,
+#rotate-right-btn.active,
+#north-btn.active {
+  background: rgba(59, 130, 246, 0.3);
+  color: var(--color-blue);
+}
+
+/* ============================================================
+   DISTANCE MEASURE DISPLAY
+   ============================================================ */
+#measure-distance-display {
+  position: fixed;
+  bottom: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1002;
+  background: rgba(10, 14, 26, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid #00d2ff;
+  border-radius: 20px;
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #00d2ff;
+  box-shadow: 0 4px 20px rgba(0, 210, 255, 0.25);
+  pointer-events: none;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+/* Measure button active state */
+#measure-btn.active {
+  background: rgba(0, 210, 255, 0.2) !important;
+  color: #00d2ff !important;
+  border-color: rgba(0, 210, 255, 0.5) !important;
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.3);
+}
