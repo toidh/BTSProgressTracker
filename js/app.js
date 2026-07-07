@@ -1277,8 +1277,124 @@ const App = {
             <td>${s['Đối tác'] || '-'}</td>
             <td>${s['TKTU ONSITE'] || '-'}</td>
             <td>${formatTime(s['Ngày cập nhật'])}</td>
-            <td>${s['Nguyên nhân chưa hoàn thành'] || '-'}</td>
+            <td class="wrap-text">${s['Nguyên nhân chưa hoàn thành'] || '-'}</td>
             <td class="num" style="color:var(--color-red);font-weight:bold">${s._daysDelayed || '-'}</td>
+          </tr>`;
+        }).join('');
+        
+        html += `
+          <tr style="font-weight:700;border-top:2px solid var(--border-glass);background:rgba(255,255,255,0.02)">
+            <td>TỔNG</td>
+            <td style="color:var(--color-blue)">${delayedSites.length} trạm</td>
+            <td class="num" style="color:var(--color-green)">${d4g}</td>
+            <td class="num" style="color:var(--color-green)">${d5g}</td>
+            <td colspan="5"></td>
+          </tr>
+        `;
+        
+        html += `</tbody></table></div>`;
+        delayedEl.innerHTML = html;
+      }
+    }
+  },
+  renderDelayedSitesDk(sites) {
+// --- Delayed Sites Tracking ---
+    const delayedEl = document.getElementById('dash-delayed-sites-dk');
+    if (delayedEl) {
+      const todayDate = new Date();
+      todayDate.setHours(0,0,0,0);
+      const delayedSites = sites.filter(s => {
+        const str = String(s['Ngày đăng ký'] || '');
+        const m = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+        const d = m ? new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])) : null;
+        if (!d) return false;
+        d.setHours(0,0,0,0);
+        const diff = Math.floor((todayDate - d) / 86400000);
+        if (diff > 2 && DataService.getSiteStatus(s) !== 'completed') {
+            s._daysDelayedDk = diff;
+            return true;
+        }
+        return false;
+      });
+      
+      // Apply sorting
+      App.delayedSortDk = App.delayedSortDk || 'days';
+      delayedSites.sort((a, b) => {
+        if (App.delayedSortDk === 'partner') {
+          const pA = String(a['Đối tác'] || '').trim().toLowerCase();
+          const pB = String(b['Đối tác'] || '').trim().toLowerCase();
+          if (pA !== pB) return pA.localeCompare(pB, 'vi');
+        } else if (App.delayedSortDk === 'tktu') {
+          const pA = String(a['TKTU ONSITE'] || '').trim().toLowerCase();
+          const pB = String(b['TKTU ONSITE'] || '').trim().toLowerCase();
+          if (pA !== pB) return pA.localeCompare(pB, 'vi');
+        }
+        
+        // default/fallback: sort by days descending
+        const dA = a._daysDelayedDk || 0;
+        const dB = b._daysDelayedDk || 0;
+        if (dA !== dB) return dB - dA;
+        
+        const nameA = String(a['Site'] || '').trim();
+        const nameB = String(b['Site'] || '').trim();
+        return nameA.localeCompare(nameB);
+      });
+
+      if (delayedSites.length === 0) {
+        delayedEl.innerHTML = '<div class="dash-empty" style="color:var(--text-muted);font-style:italic">Không có trạm thi công kéo dài > 2 ngày</div>';
+      } else {
+        const d4g = delayedSites.filter(s => String(s['Phân loại']||'').trim() !== '5G Z').length;
+        const d5g = delayedSites.filter(s => String(s['Phân loại']||'').trim() !== '4G Z').length;
+        
+        const formatProgress = (p, type, cat) => {
+          if (cat === '5G Z' && type === '4G') return '';
+          if (cat === '4G Z' && type === '5G') return '';
+          const str = String(p || '').trim();
+          if (str === 'Hoàn thành') return '✅';
+          if (str === 'Đang thực hiện') return '🔄';
+          return '-';
+        };
+
+        const formatTime = (str) => {
+          const s = String(str || '');
+          const parts = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+          if (parts) return `${parts[1]}/${parts[2]}/${parts[3]}`;
+          return s;
+        };
+
+        let html = `
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; margin-bottom:10px; gap:10px;">
+            <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">
+               Tổng số: <strong style="color:var(--color-red);font-size:14px" class="clickable-number" onclick="App.showSiteList('delayed_sites_dk', 'Theo dõi trạm đăng ký > 2 ngày')">${delayedSites.length}</strong> trạm | 
+               4G: <strong style="color:var(--color-red)">${d4g}</strong> | 
+               5G: <strong style="color:var(--color-red)">${d5g}</strong>
+            </div>
+            <div>
+              <select class="form-select" style="padding:4px 8px; font-size:12px; width:auto; background:rgba(0,0,0,0.2)" onchange="App.delayedSortDk = this.value; App.renderDelayedSitesDk(App.sites)">
+                <option value="days" ${App.delayedSortDk === 'days' ? 'selected' : ''}>Sort: Số ngày chưa HT</option>
+                <option value="partner" ${App.delayedSortDk === 'partner' ? 'selected' : ''}>Sort: Đối tác</option>
+                <option value="tktu" ${App.delayedSortDk === 'tktu' ? 'selected' : ''}>Sort: TKTU</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="dash-table">
+              <thead><tr><th>Mã trạm</th><th>Phân loại</th><th class="num">4G</th><th class="num">5G</th><th>Đối tác</th><th>TKTU</th><th>Ngày đăng ký</th><th>Nguyên nhân</th><th class="num">Chưa HT (ngày)</th></tr></thead>
+              <tbody>
+        `;
+        html += delayedSites.map(s => {
+          const status = DataService.getSiteStatus(s);
+          const color = DataService.getStatusColor(status, s);
+          return `<tr>
+            <td><span class="status-dot" style="background:${color}"></span><a href="#" class="clickable-site" style="color:${color}" onclick="App.openMapPopup('${s['Site']}'); return false;">${s['Site']}</a></td>
+            <td>${s['Phân loại'] || '-'}</td>
+            <td class="num">${formatProgress(s['Tiến độ 4G'], '4G', s['Phân loại'])}</td>
+            <td class="num">${formatProgress(s['Tiến độ 5G'], '5G', s['Phân loại'])}</td>
+            <td>${s['Đối tác'] || '-'}</td>
+            <td>${s['TKTU ONSITE'] || '-'}</td>
+            <td>${formatTime(s['Ngày đăng ký'])}</td>
+            <td class="wrap-text">${s['Nguyên nhân chưa hoàn thành'] || '-'}</td>
+            <td class="num" style="color:var(--color-red);font-weight:bold">${s._daysDelayedDk || '-'}</td>
           </tr>`;
         }).join('');
         
@@ -1884,6 +2000,7 @@ const App = {
 
     
     this.renderDelayedSites(sites);
+    this.renderDelayedSitesDk(sites);
 
     const el = document.getElementById('dash-recent-updates');
     if (updated.length === 0) {
@@ -2086,6 +2203,42 @@ const App = {
           const diff = Math.floor((todayDate - d) / 86400000);
           if (diff > 2) {
               s._daysDelayed = diff;
+              return true;
+          }
+          return false;
+        });
+      }
+      else if (filterId === 'delayed_sites_dk') {
+        const parseDate = str => { const m = String(str || '').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/); return m ? new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1])) : null; };
+        const todayDate = new Date();
+        todayDate.setHours(0,0,0,0);
+        filtered = this.sites.filter(s => {
+          if (DataService.getSiteStatus(s) === 'completed') return false;
+          const d = parseDate(s['Ngày đăng ký']);
+          if (!d) return false;
+          d.setHours(0,0,0,0);
+          const diff = Math.floor((todayDate - d) / 86400000);
+          if (diff > 2) {
+              s._daysDelayedDk = diff;
+              return true;
+          }
+          return false;
+        });
+      }
+      else if (filterId === 'delayed_sites_dk') {
+        const todayDate = new Date();
+        filtered = this.sites.filter(s => {
+          if (DataService.getSiteStatus(s) !== 'in_progress') return false;
+          const str = String(s['Ngày đăng ký'] || '');
+          const parts = str.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s*(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?/);
+          let d = null;
+          if (parts) {
+            d = new Date(parseInt(parts[3]), parseInt(parts[2]) - 1, parseInt(parts[1]), parseInt(parts[4]) || 0, parseInt(parts[5]) || 0, parseInt(parts[6]) || 0);
+          }
+          if (!d) return false;
+          const diffHours = (todayDate - d) / 3600000;
+          if (diffHours > 48) {
+              s._daysDelayedDk = Math.floor(diffHours / 24);
               return true;
           }
           return false;
@@ -2295,7 +2448,7 @@ const App = {
   // ============================================================
   // Exports
   // ============================================================
-    cleanSiteForExport(site, isCheckinMode = false, isDelayedMode = false) {
+    cleanSiteForExport(site, isCheckinMode = false, isDelayedMode = false, isDelayedDkMode = false) {
     
       const ordered = {};
       
@@ -2305,7 +2458,7 @@ const App = {
       if (cat === '4G Z') p5g = '';
       if (cat === '5G Z') p4g = '';
       
-      if (isDelayedMode) {
+      if (isDelayedMode || isDelayedDkMode) {
         ordered['Trạm'] = site['Site'] || '';
         ordered['Phân loại'] = site['Phân loại'] || '';
         ordered['4G'] = p4g;
@@ -2321,9 +2474,13 @@ const App = {
           }
         }
         ordered['Ghi chú'] = ghiChu;
-        ordered['Ngày thực hiện'] = site['Ngày cập nhật'] || '';
+        if (isDelayedDkMode) {
+          ordered['Ngày đăng ký'] = site['Ngày đăng ký'] || '';
+        } else {
+          ordered['Ngày thực hiện'] = site['Ngày cập nhật'] || '';
+        }
         ordered['Nguyên nhân'] = site['Nguyên nhân chưa hoàn thành'] || '';
-        ordered['Số ngày chưa hoàn thành'] = site._daysDelayed || '';
+        ordered['Số ngày chưa hoàn thành'] = isDelayedDkMode ? (site._daysDelayedDk || '') : (site._daysDelayed || '');
         return ordered;
       }
 
@@ -2706,7 +2863,8 @@ const App = {
     const isCheckinMode = this.currentListFilter && this.currentListFilter.includes('checkin');
     
       const isDelayedMode = this.currentListFilter === 'delayed_sites';
-      const cleanData = exportData.map(s => this.cleanSiteForExport(s, isCheckinMode, isDelayedMode));
+      const isDelayedDkMode = this.currentListFilter === 'delayed_sites_dk';
+      const cleanData = exportData.map(s => this.cleanSiteForExport(s, isCheckinMode, isDelayedMode, isDelayedDkMode));
 
 
     const wb = XLSX.utils.book_new();
