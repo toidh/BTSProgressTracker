@@ -1206,6 +1206,23 @@ body.modal-open {
 /* ============================================================
    LEAFLET OVERRIDES
    ============================================================ */
+/* Fix map tile grid lines in Chrome caused by leaflet-rotate 3D context */
+.leaflet-tile-pane {
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+}
+.leaflet-tile {
+  /* Force GPU to render without subpixel gaps */
+  outline: 1px solid transparent;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  /* Add a tiny shadow to fill antialiasing gaps */
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.leaflet-container {
+  background-color: var(--bg-primary) !important;
+}
+
 .leaflet-control-zoom {
   border: none !important;
   box-shadow: var(--shadow-glass) !important;
