@@ -2234,7 +2234,7 @@ const App = {
           datasets: [
             { type: 'line', label: 'Tỷ lệ (%)', data: rates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { display: true, color: '#bfdbfe', anchor: 'end', align: 'top', font: { weight: 'bold', size: 12 }, formatter: v => v > 0 ? v + '%' : '' } },
             { type: 'bar', label: 'Hoàn thành', data: comps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { display: true, color: '#fff', anchor: 'center', align: 'center', font: { weight: 'bold', size: 13 }, formatter: v => v || '' } },
-            { type: 'bar', label: 'Khối lượng giao', data: totals, backgroundColor: 'rgba(239, 68, 68, 0.4)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { display: true, color: '#fca5a5', anchor: 'center', align: 'center', font: { weight: 'bold', size: 13 }, formatter: v => v || '' } }
+            { type: 'bar', label: 'Khối lượng giao', data: totals, backgroundColor: 'rgba(239, 68, 68, 0.4)', borderColor: '#ef4444', borderWidth: 1, borderWidth: 1, yAxisID: 'y', datalabels: { display: true, color: '#fca5a5', anchor: 'center', align: 'center', font: { weight: 'bold', size: 13 }, formatter: v => v || '' } }
           ]
         },
         plugins: dlPlugin,
@@ -2901,7 +2901,7 @@ const App = {
           data: { labels: pNames, datasets: [
             { type: 'line', label: 'Tỷ lệ (%)', data: pRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'end', align: 'top', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
             { type: 'bar', label: 'Hoàn thành', data: pComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
-            { type: 'bar', label: 'Khối lượng giao', data: pTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
+            { type: 'bar', label: 'Khối lượng giao', data: pTotals, backgroundColor: 'rgba(239, 68, 68, 0.4)', borderColor: '#ef4444', borderWidth: 1, borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
           ]},
           options: { ...baseOpts, layout: { padding: { top: 60 } }, plugins: { legend: comboLegend }, scales: comboScales }
         });
@@ -2926,7 +2926,7 @@ const App = {
           data: { labels: cNames, datasets: [
             { type: 'line', label: 'Tỷ lệ (%)', data: cRates, borderColor: '#3b82f6', backgroundColor: '#3b82f6', borderWidth: 2, pointRadius: 4, yAxisID: 'y1', datalabels: { color: '#1d4ed8', anchor: 'end', align: 'top', font: { weight: 'bold', size: 11 }, formatter: v => v > 0 ? v + '%' : '' } },
             { type: 'bar', label: 'Hoàn thành', data: cComps, backgroundColor: '#10b981', borderColor: '#10b981', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#064e3b', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } },
-            { type: 'bar', label: 'Khối lượng giao', data: cTotals, backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
+            { type: 'bar', label: 'Khối lượng giao', data: cTotals, backgroundColor: 'rgba(239, 68, 68, 0.4)', borderColor: '#ef4444', borderWidth: 1, borderWidth: 1, yAxisID: 'y', datalabels: { color: '#881337', anchor: 'center', align: 'center', font: { weight: 'bold', size: 11 }, formatter: v => v || '' } }
           ]},
           options: { ...baseOpts, layout: { padding: { top: 60 } }, plugins: { legend: comboLegend }, scales: comboScales }
         });
