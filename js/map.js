@@ -31,14 +31,17 @@ const MapManager = {
     const zoom = savedState ? savedState.zoom : AppConfig.MAP_ZOOM;
 
     this.map = L.map('map', {
+      preferCanvas: true,
       rotate: true,
       touchRotate: true,
+      bounceAtZoomLimits: false,
       bearing: 0,
       center: center,
       zoom: zoom,
       minZoom: AppConfig.MAP_MIN_ZOOM,
       maxZoom: AppConfig.MAP_MAX_ZOOM,
       zoomControl: false,
+      zoomAnimation: false,
       attributionControl: false,
     });
 
@@ -78,12 +81,25 @@ const MapManager = {
       if (bearingVal) bearingVal.textContent = Math.round(((this.mapBearing % 360) + 360) % 360) + '°';
     });
 
+    // Fix vector layer drifting on mobile pinch-zoom with leaflet-rotate
+    this.map.on('zoomstart', () => {
+      if (L.Browser.mobile || L.Browser.touch) {
+        const pane = this.map.getPane('overlayPane');
+        if (pane) pane.style.opacity = '0';
+      }
+    });
+    this.map.on('zoomend', () => {
+      if (L.Browser.mobile || L.Browser.touch) {
+        const pane = this.map.getPane('overlayPane');
+        if (pane) pane.style.opacity = '1';
+      }
+    });
+
     // Add legend
     this.addLegend();
 
     // Measure layer
     this.measureLayer = L.layerGroup().addTo(this.map);
-
     // Map click for measure
     this.map.on('click', (e) => {
       if (this.measureMode) {
